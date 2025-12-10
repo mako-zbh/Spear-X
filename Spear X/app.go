@@ -2369,114 +2369,71 @@ func (a *App) RepairConfigFile() error {
 	return nil
 }
 
-// CleanupDuplicateTools 清理重复的工具
+// CleanupDuplicateTools 清理重复的工具（已禁用）
 func (a *App) CleanupDuplicateTools() error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
-
-	// 读取现有配置
-	var config Config
-	data, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("读取配置文件失败: %v", err)
-	}
-
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("解析配置文件失败: %v", err)
-	}
-
-	// 从config中获取categories，确保包含所有信息包括图标
-	categories := Categories{
-		Category: config.Categories,
-	}
-
-	fmt.Println("开始清理重复工具...")
-
-	// 记录已处理的工具路径和对应的分类映射
-	processedPaths := make(map[string]string) // path -> 最佳分类名
-	duplicatesFound := 0
-
-	// 第一轮：找出最佳分类（优先选择中文分类名）
-	for _, category := range categories.Category {
-		for _, tool := range category.Tool {
-			if existingCategory, exists := processedPaths[tool.Path]; exists {
-				// 发现重复工具
-				duplicatesFound++
-				fmt.Printf("发现重复工具: %s\n", tool.Path)
-				fmt.Printf("  已存在分类: %s\n", existingCategory)
-				fmt.Printf("  当前分类: %s\n", category.Name)
-
-				// 选择更好的分类名（中文优先，或者更长的名称）
-				if a.isBetterCategoryName(category.Name, existingCategory) {
-					processedPaths[tool.Path] = category.Name
-					fmt.Printf("  选择分类: %s\n", category.Name)
-				} else {
-					fmt.Printf("  保持分类: %s\n", existingCategory)
-				}
-			} else {
-				processedPaths[tool.Path] = category.Name
-			}
-		}
-	}
-
-	if duplicatesFound == 0 {
-		fmt.Println("没有发现重复工具")
-		return nil
-	}
-
-	fmt.Printf("发现 %d 个重复工具，开始合并...\n", duplicatesFound)
-
-	// 第二轮：重建分类，合并重复工具
-	newCategories := []Category{}
-	categoryMap := make(map[string]*Category) // 分类名 -> 分类对象
-
-	for _, category := range categories.Category {
-		for _, tool := range category.Tool {
-			bestCategoryName := processedPaths[tool.Path]
-
-			// 找到或创建目标分类
-			if targetCategory, exists := categoryMap[bestCategoryName]; exists {
-				// 检查工具是否已经存在于目标分类中
-				toolExists := false
-				for _, existingTool := range targetCategory.Tool {
-					if existingTool.Path == tool.Path {
-						toolExists = true
-						// 如果新工具有文件名而现有工具没有，则更新
-						if existingTool.FileName == "" && tool.FileName != "" {
-							existingTool.FileName = tool.FileName
-							existingTool.Value = tool.Value
-							existingTool.Command = tool.Command
-							fmt.Printf("更新工具文件名: %s -> %s\n", tool.Path, tool.FileName)
-						}
-						break
-					}
-				}
-
-				if !toolExists {
-					targetCategory.Tool = append(targetCategory.Tool, tool)
-				}
-			} else {
-				// 创建新分类
-				newCategory := Category{
-					Name: bestCategoryName,
-					Icon: category.Icon, // 保留原分类的图标
-					Tool: []Tool{tool},
-				}
-				newCategories = append(newCategories, newCategory)
-				categoryMap[bestCategoryName] = &newCategories[len(newCategories)-1]
-			}
-		}
-	}
-
-	// 更新配置
-	categories.Category = newCategories
-
-	// 保存配置
-	if err := a.saveCategoriesToFile(categories, config); err != nil {
-		return fmt.Errorf("保存配置失败: %v", err)
-	}
-
-	fmt.Printf("重复工具清理完成，合并了 %d 个重复工具\n", duplicatesFound)
+	// 已禁用：清理重复工具逻辑
 	return nil
+	/*
+	   以下为原始清理重复工具逻辑，现已注释掉以避免对运行程序造成影响。
+	   保留代码以便未来需要时可以快速恢复。
+
+	   configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+
+	   var config Config
+	   data, err := ioutil.ReadFile(configPath)
+	   if err != nil {
+	       return fmt.Errorf("读取配置文件失败: %v", err)
+	   }
+
+	   if err := yaml.Unmarshal(data, &config); err != nil {
+	       return fmt.Errorf("解析配置文件失败: %v", err)
+	   }
+
+	   categories := Categories{ Category: config.Categories }
+	   fmt.Println("开始清理重复工具...")
+
+	   processedPaths := make(map[string]string)
+	   duplicatesFound := 0
+
+	   for _, category := range categories.Category {
+	       for _, tool := range category.Tool {
+	           if existingCategory, exists := processedPaths[tool.Path]; exists {
+	               duplicatesFound++
+	               if a.isBetterCategoryName(category.Name, existingCategory) {
+	                   processedPaths[tool.Path] = category.Name
+	               }
+	           } else {
+	               processedPaths[tool.Path] = category.Name
+	           }
+	       }
+	   }
+
+	   if duplicatesFound == 0 { return nil }
+
+	   newCategories := []Category{}
+	   categoryMap := make(map[string]*Category)
+
+	   for _, category := range categories.Category {
+	       for _, tool := range category.Tool {
+	           bestCategoryName := processedPaths[tool.Path]
+	           if targetCategory, exists := categoryMap[bestCategoryName]; exists {
+	               toolExists := false
+	               for _, existingTool := range targetCategory.Tool {
+	                   if existingTool.Path == tool.Path { toolExists = true; break }
+	               }
+	               if !toolExists { targetCategory.Tool = append(targetCategory.Tool, tool) }
+	           } else {
+	               newCategory := Category{ Name: bestCategoryName, Icon: category.Icon, Tool: []Tool{tool} }
+	               newCategories = append(newCategories, newCategory)
+	               categoryMap[bestCategoryName] = &newCategories[len(newCategories)-1]
+	           }
+	       }
+	   }
+
+	   categories.Category = newCategories
+	   if err := a.saveCategoriesToFile(categories, config); err != nil { return fmt.Errorf("保存配置失败: %v", err) }
+	   return nil
+	*/
 }
 
 // isBetterCategoryName 判断哪个分类名更好
