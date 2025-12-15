@@ -70,6 +70,7 @@ type Config struct {
 // Tool 工具结构体
 type Tool struct {
 	ID          string    `json:"id" yaml:"ID,omitempty"`                   // 工具唯一ID: {工具名称}-{YYYYMMDD}
+	UniqueID    string    `json:"uniqueId" yaml:"UniqueID,omitempty"`       // 工具唯一标识符: {路径}-{文件名}
 	Name        string    `json:"name" yaml:"ToolName"`                     // 工具名称
 	Path        string    `json:"path" yaml:"PATH"`                         // 工具路径
 	FileName    string    `json:"fileName" yaml:"FileName"`                 // 文件名
@@ -1272,13 +1273,35 @@ func (a *App) ScanToolsInPath(scanPath string) ([]ScannedTool, error) {
 			// 使用filepath.ToSlash确保路径分隔符统一
 			toolPath = filepath.ToSlash(toolPath)
 
-			// 扫描所有工具目录，不管是否有可执行文件
-			scannedTool := ScannedTool{
-				Path:          toolPath,
-				Category:      categoryInfo.Name,
-				PossibleFiles: []string{}, // 不再使用此字段，保留兼容性
+			// 扫描工具目录下的可执行文件
+			fullToolPath := filepath.Join(scanPath, categoryDir.Name(), toolDir.Name())
+			executableFiles, err := a.scanExecutableFiles(fullToolPath)
+			if err != nil {
+				fmt.Printf("扫描工具目录 %s 的可执行文件失败: %v\n", toolDir.Name(), err)
+				// 即使扫描失败，也添加工具目录（保持向后兼容）
+				executableFiles = []string{}
 			}
-			scannedTools = append(scannedTools, scannedTool)
+
+			// 如果没有找到可执行文件，仍然添加工具目录（保持向后兼容）
+			if len(executableFiles) == 0 {
+				scannedTool := ScannedTool{
+					Path:          toolPath,
+					Category:      categoryInfo.Name,
+					PossibleFiles: []string{}, // 不再使用此字段，保留兼容性
+				}
+				scannedTools = append(scannedTools, scannedTool)
+			} else {
+				// 为每个可执行文件创建一个工具条目
+				for _, executableFile := range executableFiles {
+					// 为每个可执行文件创建唯一的工具条目
+					scannedTool := ScannedTool{
+						Path:          toolPath,
+						Category:      categoryInfo.Name,
+						PossibleFiles: []string{executableFile}, // 保存可执行文件信息
+					}
+					scannedTools = append(scannedTools, scannedTool)
+				}
+			}
 		}
 	}
 
@@ -1335,12 +1358,34 @@ func (a *App) ScanToolsInCustomPath(scanPath string) ([]ScannedTool, error) {
 				for _, subEntry := range subEntries {
 					if subEntry.IsDir() {
 						toolAbsPath := filepath.Join(categoryPath, subEntry.Name())
-						scannedTool := ScannedTool{
-							Path:          toolAbsPath, // 使用绝对路径
-							Category:      categoryInfo.Name,
-							PossibleFiles: []string{},
+
+						// 扫描工具目录下的可执行文件
+						executableFiles, err := a.scanExecutableFiles(toolAbsPath)
+						if err != nil {
+							fmt.Printf("扫描工具目录 %s 的可执行文件失败: %v\n", subEntry.Name(), err)
+							// 即使扫描失败，也添加工具目录（保持向后兼容）
+							executableFiles = []string{}
 						}
-						scannedTools = append(scannedTools, scannedTool)
+
+						// 如果没有找到可执行文件，仍然添加工具目录（保持向后兼容）
+						if len(executableFiles) == 0 {
+							scannedTool := ScannedTool{
+								Path:          toolAbsPath, // 使用绝对路径
+								Category:      categoryInfo.Name,
+								PossibleFiles: []string{},
+							}
+							scannedTools = append(scannedTools, scannedTool)
+						} else {
+							// 为每个可执行文件创建一个工具条目
+							for _, executableFile := range executableFiles {
+								scannedTool := ScannedTool{
+									Path:          toolAbsPath, // 使用绝对路径
+									Category:      categoryInfo.Name,
+									PossibleFiles: []string{executableFile}, // 保存可执行文件信息
+								}
+								scannedTools = append(scannedTools, scannedTool)
+							}
+						}
 					}
 				}
 				categoryScanned = true
@@ -1356,12 +1401,34 @@ func (a *App) ScanToolsInCustomPath(scanPath string) ([]ScannedTool, error) {
 		for _, entry := range entries {
 			if entry.IsDir() {
 				toolAbsPath := filepath.Join(scanPath, entry.Name())
-				scannedTool := ScannedTool{
-					Path:          toolAbsPath, // 使用绝对路径
-					Category:      categoryInfo.Name,
-					PossibleFiles: []string{},
+
+				// 扫描工具目录下的可执行文件
+				executableFiles, err := a.scanExecutableFiles(toolAbsPath)
+				if err != nil {
+					fmt.Printf("扫描工具目录 %s 的可执行文件失败: %v\n", entry.Name(), err)
+					// 即使扫描失败，也添加工具目录（保持向后兼容）
+					executableFiles = []string{}
 				}
-				scannedTools = append(scannedTools, scannedTool)
+
+				// 如果没有找到可执行文件，仍然添加工具目录（保持向后兼容）
+				if len(executableFiles) == 0 {
+					scannedTool := ScannedTool{
+						Path:          toolAbsPath, // 使用绝对路径
+						Category:      categoryInfo.Name,
+						PossibleFiles: []string{},
+					}
+					scannedTools = append(scannedTools, scannedTool)
+				} else {
+					// 为每个可执行文件创建一个工具条目
+					for _, executableFile := range executableFiles {
+						scannedTool := ScannedTool{
+							Path:          toolAbsPath, // 使用绝对路径
+							Category:      categoryInfo.Name,
+							PossibleFiles: []string{executableFile}, // 保存可执行文件信息
+						}
+						scannedTools = append(scannedTools, scannedTool)
+					}
+				}
 			}
 		}
 	}
@@ -1720,20 +1787,30 @@ func (a *App) GetNewToolsFromScanned(tools []ScannedTool) ([]ScannedTool, error)
 		yaml.Unmarshal(data, &config)
 	}
 
-	// 获取现有工具的路径作为唯一标识，避免重复添加同一个工具目录
-	existingToolPaths := make(map[string]bool)
+	// 获取现有工具的唯一标识符(路径+文件名)，避免重复添加同一个工具
+	existingToolIDs := make(map[string]bool)
 	for _, category := range categories.Category {
 		for _, tool := range category.Tool {
-			// 使用路径作为唯一标识，因为同一个工具可能有多个可执行文件
-			existingToolPaths[tool.Path] = true
+			// 使用路径+文件名作为唯一标识符
+			uniqueID := a.generateToolUniqueID(tool.Path, tool.FileName)
+			existingToolIDs[uniqueID] = true
 		}
 	}
 
 	// 过滤出真正的新工具
 	var newTools []ScannedTool
 	for _, scannedTool := range tools {
-		// 检查这个扫描到的工具路径是否已经存在
-		if !existingToolPaths[scannedTool.Path] {
+		// 从ScannedTool中获取文件名
+		fileName := ""
+		if len(scannedTool.PossibleFiles) > 0 {
+			fileName = scannedTool.PossibleFiles[0]
+		}
+
+		// 生成扫描工具的唯一标识符
+		uniqueID := a.generateToolUniqueID(scannedTool.Path, fileName)
+
+		// 检查这个扫描到的工具是否已经存在
+		if !existingToolIDs[uniqueID] {
 			newTools = append(newTools, scannedTool)
 		}
 	}
@@ -1759,20 +1836,30 @@ func (a *App) AutoAddScannedTools(tools []ScannedTool) error {
 		existingCategoryMap[category.Name] = category
 	}
 
-	// 获取现有工具的路径作为唯一标识，避免重复添加同一个工具目录
-	existingToolPaths := make(map[string]bool)
+	// 获取现有工具的唯一标识符(路径+文件名)，避免重复添加同一个工具
+	existingToolIDs := make(map[string]bool)
 	for _, category := range categories.Category {
 		for _, tool := range category.Tool {
-			// 使用路径作为唯一标识，因为同一个工具可能有多个可执行文件
-			existingToolPaths[tool.Path] = true
+			// 使用路径+文件名作为唯一标识符
+			uniqueID := a.generateToolUniqueID(tool.Path, tool.FileName)
+			existingToolIDs[uniqueID] = true
 		}
 	}
 
 	// 添加新发现的工具
 	for _, scannedTool := range tools {
-		// 检查这个扫描到的工具路径是否已经存在
-		if existingToolPaths[scannedTool.Path] {
-			fmt.Printf("跳过已存在的工具: 路径: %s\n", scannedTool.Path)
+		// 从ScannedTool中获取文件名
+		fileName := ""
+		if len(scannedTool.PossibleFiles) > 0 {
+			fileName = scannedTool.PossibleFiles[0]
+		}
+
+		// 生成扫描工具的唯一标识符
+		uniqueID := a.generateToolUniqueID(scannedTool.Path, fileName)
+
+		// 检查这个扫描到的工具是否已经存在
+		if existingToolIDs[uniqueID] {
+			fmt.Printf("跳过已存在的工具: 路径: %s, 文件: %s\n", scannedTool.Path, fileName)
 			continue // 跳过已存在的工具
 		}
 
@@ -1783,10 +1870,26 @@ func (a *App) AutoAddScannedTools(tools []ScannedTool) error {
 			toolName = "Unknown Tool"
 		}
 
+		// 如果有文件名，使用文件名作为工具名的一部分，以区分同一目录下的多个工具
+		if fileName != "" {
+			// 提取文件名的基本部分（不含扩展名）
+			fileBaseName := strings.TrimSuffix(filepath.Base(fileName), filepath.Ext(fileName))
+			toolName = fmt.Sprintf("%s - %s", toolName, fileBaseName)
+		}
+
 		// 分析工具目录内容，决定如何添加工具
 		basePath := a.getResourcePath()
 		fullToolPath := filepath.Join(basePath, scannedTool.Path)
-		toolType, fileName, command := a.analyzeToolDirectory(fullToolPath)
+
+		// 如果有指定文件名，使用该文件名进行分析
+		var toolType, command string
+		if fileName != "" {
+			// 根据文件扩展名设置执行类型
+			toolType, command = a.setExecutionTypeByFileName(fileName)
+		} else {
+			// 没有指定文件名，使用目录分析
+			toolType, fileName, command = a.analyzeToolDirectory(fullToolPath)
+		}
 
 		// 创建新工具，使用智能分析的结果
 		newTool := Tool{
@@ -2369,71 +2472,74 @@ func (a *App) RepairConfigFile() error {
 	return nil
 }
 
-// CleanupDuplicateTools 清理重复的工具（已禁用）
+// CleanupDuplicateTools 清理重复的工具
 func (a *App) CleanupDuplicateTools() error {
-	// 已禁用：清理重复工具逻辑
+	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+
+	// 读取现有配置
+	var config Config
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("读取配置文件失败: %v", err)
+	}
+
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("解析配置文件失败: %v", err)
+	}
+
+	// 从config中获取categories，确保包含所有信息包括图标
+	categories := Categories{
+		Category: config.Categories,
+	}
+
+	fmt.Println("开始清理重复工具...")
+
+	// 使用map记录已处理的工具，key为工具唯一标识符(路径+文件名)，value为工具信息
+	processedTools := make(map[string]Tool)
+	duplicatesFound := 0
+
+	// 遍历所有分类和工具，找出重复项并保留最佳版本
+	for _, category := range categories.Category {
+		for _, tool := range category.Tool {
+			// 生成工具的唯一标识符
+			uniqueID := a.generateToolUniqueID(tool.Path, tool.FileName)
+
+			if existingTool, exists := processedTools[uniqueID]; exists {
+				// 发现重复工具
+				duplicatesFound++
+				fmt.Printf("发现重复工具: %s\n", uniqueID)
+				fmt.Printf("  现有工具: %s (分类: %s)\n", existingTool.Name, category.Name)
+				fmt.Printf("  新工具: %s (分类: %s)\n", tool.Name, category.Name)
+
+				// 比较并保留更好的工具信息
+				betterTool := a.compareAndSelectBetterTool(existingTool, tool)
+				processedTools[uniqueID] = betterTool
+			} else {
+				processedTools[uniqueID] = tool
+			}
+		}
+	}
+
+	if duplicatesFound == 0 {
+		fmt.Println("没有发现重复工具")
+		return nil
+	}
+
+	fmt.Printf("发现 %d 个重复工具，开始重建分类...\n", duplicatesFound)
+
+	// 重建分类结构，将去重后的工具重新分配到合适的分类
+	newCategories := a.rebuildCategories(processedTools, categories.Category)
+
+	// 更新配置
+	categories.Category = newCategories
+
+	// 保存配置
+	if err := a.saveCategoriesToFile(categories, config); err != nil {
+		return fmt.Errorf("保存配置失败: %v", err)
+	}
+
+	fmt.Printf("重复工具清理完成，合并了 %d 个重复工具\n", duplicatesFound)
 	return nil
-	/*
-	   以下为原始清理重复工具逻辑，现已注释掉以避免对运行程序造成影响。
-	   保留代码以便未来需要时可以快速恢复。
-
-	   configPath := filepath.Join(a.getResourcePath(), "tool.yml")
-
-	   var config Config
-	   data, err := ioutil.ReadFile(configPath)
-	   if err != nil {
-	       return fmt.Errorf("读取配置文件失败: %v", err)
-	   }
-
-	   if err := yaml.Unmarshal(data, &config); err != nil {
-	       return fmt.Errorf("解析配置文件失败: %v", err)
-	   }
-
-	   categories := Categories{ Category: config.Categories }
-	   fmt.Println("开始清理重复工具...")
-
-	   processedPaths := make(map[string]string)
-	   duplicatesFound := 0
-
-	   for _, category := range categories.Category {
-	       for _, tool := range category.Tool {
-	           if existingCategory, exists := processedPaths[tool.Path]; exists {
-	               duplicatesFound++
-	               if a.isBetterCategoryName(category.Name, existingCategory) {
-	                   processedPaths[tool.Path] = category.Name
-	               }
-	           } else {
-	               processedPaths[tool.Path] = category.Name
-	           }
-	       }
-	   }
-
-	   if duplicatesFound == 0 { return nil }
-
-	   newCategories := []Category{}
-	   categoryMap := make(map[string]*Category)
-
-	   for _, category := range categories.Category {
-	       for _, tool := range category.Tool {
-	           bestCategoryName := processedPaths[tool.Path]
-	           if targetCategory, exists := categoryMap[bestCategoryName]; exists {
-	               toolExists := false
-	               for _, existingTool := range targetCategory.Tool {
-	                   if existingTool.Path == tool.Path { toolExists = true; break }
-	               }
-	               if !toolExists { targetCategory.Tool = append(targetCategory.Tool, tool) }
-	           } else {
-	               newCategory := Category{ Name: bestCategoryName, Icon: category.Icon, Tool: []Tool{tool} }
-	               newCategories = append(newCategories, newCategory)
-	               categoryMap[bestCategoryName] = &newCategories[len(newCategories)-1]
-	           }
-	       }
-	   }
-
-	   categories.Category = newCategories
-	   if err := a.saveCategoriesToFile(categories, config); err != nil { return fmt.Errorf("保存配置失败: %v", err) }
-	   return nil
-	*/
 }
 
 // isBetterCategoryName 判断哪个分类名更好
@@ -2450,6 +2556,112 @@ func (a *App) isBetterCategoryName(name1, name2 string) bool {
 	return len(name1) > len(name2)
 }
 
+// compareAndSelectBetterTool 比较两个重复的工具，选择更好的一个
+func (a *App) compareAndSelectBetterTool(tool1, tool2 Tool) Tool {
+	// 优先选择有文件名的工具
+	if tool1.FileName != "" && tool2.FileName == "" {
+		return tool1
+	}
+	if tool1.FileName == "" && tool2.FileName != "" {
+		return tool2
+	}
+
+	// 如果都有文件名或都没有文件名，选择名称更长的（更具描述性）
+	if len(tool1.Name) != len(tool2.Name) {
+		if len(tool1.Name) > len(tool2.Name) {
+			return tool1
+		}
+		return tool2
+	}
+
+	// 如果名称长度相同，选择描述更长的
+	if len(tool1.Description) != len(tool2.Description) {
+		if len(tool1.Description) > len(tool2.Description) {
+			return tool1
+		}
+		return tool2
+	}
+
+	// 如果都相同，保留第一个
+	return tool1
+}
+
+// rebuildCategories 重建分类结构，将去重后的工具重新分配到合适的分类
+func (a *App) rebuildCategories(processedTools map[string]Tool, originalCategories []Category) []Category {
+	// 创建分类名到分类的映射，保留原始分类的图标
+	categoryMap := make(map[string]*Category)
+
+	// 初始化所有分类
+	for _, category := range originalCategories {
+		newCategory := Category{
+			Name: category.Name,
+			Icon: category.Icon,
+			Tool: []Tool{},
+		}
+		categoryMap[category.Name] = &newCategory
+	}
+
+	// 将工具分配到合适的分类
+	for _, tool := range processedTools {
+		// 查找工具的原始分类
+		originalCategory := a.findToolOriginalCategory(tool, originalCategories)
+
+		// 将工具添加到原始分类中
+		if category, exists := categoryMap[originalCategory]; exists {
+			category.Tool = append(category.Tool, tool)
+		}
+	}
+
+	// 转换为切片并过滤掉没有工具的分类
+	var result []Category
+	for _, category := range categoryMap {
+		if len(category.Tool) > 0 {
+			result = append(result, *category)
+		}
+	}
+
+	return result
+}
+
+// inferCategoryFromPath 从工具路径推断分类
+func (a *App) inferCategoryFromPath(toolPath string, categories []Category) string {
+	// 首先尝试从路径中提取可能的分类信息
+	pathParts := strings.Split(toolPath, "/")
+
+	// 如果路径中包含分类名，直接返回
+	for _, part := range pathParts {
+		for _, category := range categories {
+			if strings.EqualFold(part, category.Name) {
+				return category.Name
+			}
+		}
+	}
+
+	// 如果无法从路径推断，返回第一个分类（确保分类存在）
+	if len(categories) > 0 {
+		return categories[0].Name
+	}
+
+	// 如果没有分类，返回默认分类
+	return "默认分类"
+}
+
+// findToolOriginalCategory 查找工具的原始分类
+func (a *App) findToolOriginalCategory(tool Tool, originalCategories []Category) string {
+	// 遍历原始分类，查找工具所属的分类
+	for _, category := range originalCategories {
+		for _, originalTool := range category.Tool {
+			// 通过路径匹配工具（不使用名称，因为名称可能不同）
+			if originalTool.Path == tool.Path {
+				return category.Name
+			}
+		}
+	}
+
+	// 如果找不到，使用路径推断
+	return a.inferCategoryFromPath(tool.Path, originalCategories)
+}
+
 // isChinese 判断字符串是否包含中文字符
 func (a *App) isChinese(s string) bool {
 	for _, r := range s {
@@ -2458,6 +2670,32 @@ func (a *App) isChinese(s string) bool {
 		}
 	}
 	return false
+}
+
+// generateToolUniqueID 生成工具的唯一标识符
+func (a *App) generateToolUniqueID(path, fileName string) string {
+	// 使用路径和文件名组合作为唯一标识符
+	if fileName != "" {
+		return fmt.Sprintf("%s-%s", path, fileName)
+	}
+	// 如果没有文件名，只使用路径
+	return path
+}
+
+// setExecutionTypeByFileName 根据文件名设置执行类型
+func (a *App) setExecutionTypeByFileName(fileName string) (string, string) {
+	lowerFileName := strings.ToLower(fileName)
+
+	if strings.HasSuffix(lowerFileName, ".jar") {
+		// jar文件默认用Java8打开
+		return "Java8", "-jar"
+	} else if strings.HasSuffix(lowerFileName, ".app") {
+		// app文件默认用Open打开
+		return "Open", ""
+	} else {
+		// 其他文件（包括.exe、.sh、.py、无扩展名的二进制文件等）都使用openterm打开
+		return "openterm", ""
+	}
 }
 
 // CleanupResult 清理结果统计

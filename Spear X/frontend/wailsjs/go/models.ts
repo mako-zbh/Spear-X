@@ -2,6 +2,7 @@ export namespace main {
 	
 	export class Tool {
 	    id: string;
+	    uniqueId: string;
 	    name: string;
 	    path: string;
 	    fileName: string;
@@ -25,6 +26,7 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.uniqueId = source["uniqueId"];
 	        this.name = source["name"];
 	        this.path = source["path"];
 	        this.fileName = source["fileName"];
