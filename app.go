@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -31,9 +29,12 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// 首次启动：确保配置文件存在（不存在则创建或从旧位置迁移）
+	if err := a.ensureConfigExists(); err != nil {
+		fmt.Printf("初始化配置文件失败: %v\n", err)
+	}
+
 	// 启动时自动检测和修复配置
-	// 注意：禁用自动清理功能，避免误删用户手动添加的工具
-	// 用户可以通过手动触发清理功能来维护配置
 	go func() {
 		fmt.Println("正在进行启动时配置检查和修复...")
 
@@ -131,7 +132,7 @@ type Categories struct {
 // GetCategories 获取所有工具分类
 func (a *App) GetCategories() (Categories, error) {
 	// 直接从默认路径读取，避免循环依赖
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	var categories Categories
 
 	// 检查配置文件是否存在
@@ -166,7 +167,7 @@ func (a *App) ExecuteCustomCommand(path, optional, value, filename, customComman
 func (a *App) GetJavaConfig() (*JavaConfig, error) {
 	// 读取配置文件
 	var config Config
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("读取配置文件失败: %v", err)
@@ -183,7 +184,7 @@ func (a *App) GetJavaConfig() (*JavaConfig, error) {
 func (a *App) SaveJavaConfig(javaConfig JavaConfig) error {
 	// 读取现有配置
 	var config Config
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("读取配置文件失败: %v", err)
@@ -228,7 +229,7 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 
 	// 读取配置文件
 	var config Config
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("读取配置文件失败: %v", err)
@@ -245,7 +246,6 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 	}
 	fmt.Printf("工具绝对路径: %s\n", toolPath)
 
-	var execCommand string
 	switch value {
 	case "Java8", "Java11", "Java17":
 		// 构建Java可执行文件路径
@@ -263,7 +263,6 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 			javaExec = "java"
 		}
 
-		// 使用已获取的工具绝对路径
 		jarPath := filepath.Join(toolPath, filename)
 
 		fmt.Printf("Java可执行文件: %s\n", javaExec)
@@ -283,13 +282,30 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 			return fmt.Errorf("JAR文件不存在: %s", jarPath)
 		}
 
-		// 构建执行命令
-		execCommand = fmt.Sprintf("cd '%s' && '%s' %s -jar '%s'",
-			toolPath, javaExec, optional, filename)
+		// 直接通过 exec.Command 启动 Java，不走 shell，避免弹出终端窗口
+		args := []string{"-jar", filename}
+		if strings.TrimSpace(optional) != "" {
+			args = append(strings.Fields(optional), args...)
+		}
+		javaCmd := exec.Command(javaExec, args...)
+		javaCmd.Dir = toolPath
+		setHideWindow(javaCmd)
+		if err := javaCmd.Start(); err != nil {
+			return fmt.Errorf("启动Java工具失败: %v", err)
+		}
+		// 后台运行，不等待 Java 进程退出，避免阻塞 SpearX 界面
+		fmt.Printf("Java工具已后台启动, PID: %d\n", javaCmd.Process.Pid)
+		return nil
 
 	case "Open":
-		execCommand = fmt.Sprintf("cd '%s' && open '%s'",
-			toolPath, filename)
+		openCmd := exec.Command("open", filename)
+		openCmd.Dir = toolPath
+		setHideWindow(openCmd)
+		if err := openCmd.Start(); err != nil {
+			return fmt.Errorf("打开文件失败: %v", err)
+		}
+		return nil
+
 	case "openterm":
 		// 检查是否有自定义命令
 		if customCommand != "" {
@@ -307,10 +323,10 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 
 			// 在终端中执行自定义命令
 			return openTerminal(toolPath, command)
-		} else {
-			// 没有自定义命令，默认打开终端
-			return openTerminal(toolPath)
 		}
+		// 没有自定义命令，默认打开终端
+		return openTerminal(toolPath)
+
 	case "Browser":
 		// 直接使用系统默认浏览器打开URL或文件
 		target := ""
@@ -325,38 +341,16 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 				target = toolPath
 			}
 		}
-		execCommand = fmt.Sprintf("open '%s'", target)
+		browserCmd := exec.Command("open", target)
+		setHideWindow(browserCmd)
+		if err := browserCmd.Start(); err != nil {
+			return fmt.Errorf("打开浏览器失败: %v", err)
+		}
+		return nil
 
 	default:
 		return fmt.Errorf("不支持的命令类型: %s", value)
 	}
-
-	fmt.Println("执行命令:", execCommand)
-
-	cmd := exec.Command("sh", "-c", execCommand)
-
-	// 设置标准输出和错误输出
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &stdout)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &stderr)
-
-	// 执行命令
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("执行命令失败: %v\n标准输出: %s\n错误输出: %s",
-			err, stdout.String(), stderr.String())
-	}
-
-	// 等待命令完成
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("命令执行出错: %v\n标准输出: %s\n错误输出: %s",
-			err, stdout.String(), stderr.String())
-	}
-
-	// 输出执行结果
-	fmt.Printf("命令执行完成\n标准输出: %s\n错误输出: %s\n",
-		stdout.String(), stderr.String())
-
-	return nil
 }
 
 // openTerminal 打开终端的辅助函数
@@ -418,7 +412,7 @@ func openTerminal(dir string, initialCommand ...string) error {
 
 // AddTool 添加新工具
 func (a *App) AddTool(tool Tool, categoryName string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	var categories Categories
@@ -524,9 +518,111 @@ func (a *App) getResourcePath() string {
 	return "."
 }
 
+// getConfigDir 获取用户配置目录（应用包外，不受更新覆盖影响）
+// macOS: ~/Library/Application Support/SpearX
+// Windows: %APPDATA%/SpearX
+// Linux: ~/.config/spearx
+func (a *App) getConfigDir() string {
+	var configDir string
+	switch runtime.GOOS {
+	case "darwin":
+		home, _ := os.UserHomeDir()
+		configDir = filepath.Join(home, "Library", "Application Support", "SpearX")
+	case "windows":
+		configDir = filepath.Join(os.Getenv("APPDATA"), "SpearX")
+	default:
+		home, _ := os.UserHomeDir()
+		configDir = filepath.Join(home, ".config", "spearx")
+	}
+	return configDir
+}
+
+// getConfigPath 获取用户配置文件的完整路径
+func (a *App) getConfigPath() string {
+	return filepath.Join(a.getConfigDir(), "tool.yml")
+}
+
+// getNotesDir 获取笔记目录路径（位于配置目录下）
+func (a *App) getNotesDir() string {
+	return filepath.Join(a.getConfigDir(), "notes")
+}
+
+// ensureConfigExists 确保配置文件存在，不存在则创建或从旧位置迁移
+func (a *App) ensureConfigExists() error {
+	newPath := a.getConfigPath()
+
+	// 用户配置已存在，无需处理
+	if _, err := os.Stat(newPath); err == nil {
+		return nil
+	}
+
+	// 确保配置目录存在
+	if err := os.MkdirAll(a.getConfigDir(), 0755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %v", err)
+	}
+
+	// 尝试从旧位置（.app 包内 Resources/tool.yml）迁移
+	oldPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	if data, err := ioutil.ReadFile(oldPath); err == nil {
+		if err := ioutil.WriteFile(newPath, data, 0644); err != nil {
+			return fmt.Errorf("迁移配置文件失败: %v", err)
+		}
+		// 迁移旧笔记目录
+		a.migrateOldNotesDir()
+		fmt.Printf("已从旧位置迁移配置文件: %s -> %s\n", oldPath, newPath)
+		return nil
+	}
+
+	// 首次安装：创建带默认 JavaPaths 的配置
+	defaultConfig := Config{
+		JavaPaths: JavaConfig{
+			Java8:  "resources/java8/bin/java",
+			Java11: "resources/java11/bin/java",
+			Java17: "resources/java17/bin/java",
+		},
+		Categories: []Category{},
+	}
+	categories := Categories{Category: defaultConfig.Categories}
+	if err := a.saveCategoriesToFile(categories, defaultConfig); err != nil {
+		return fmt.Errorf("创建默认配置失败: %v", err)
+	}
+	fmt.Printf("已创建默认配置文件: %s\n", newPath)
+	return nil
+}
+
+// migrateOldNotesDir 将旧的 notes 目录从应用包内迁移到配置目录
+func (a *App) migrateOldNotesDir() {
+	oldNotesDir := filepath.Join(a.getResourcePath(), "notes")
+	newNotesDir := a.getNotesDir()
+
+	files, err := ioutil.ReadDir(oldNotesDir)
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(newNotesDir, 0755); err != nil {
+		return
+	}
+	migrated := 0
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		oldFile := filepath.Join(oldNotesDir, file.Name())
+		newFile := filepath.Join(newNotesDir, file.Name())
+		if data, err := ioutil.ReadFile(oldFile); err == nil {
+			if err := ioutil.WriteFile(newFile, data, 0644); err == nil {
+				migrated++
+			}
+		}
+	}
+	if migrated > 0 {
+		fmt.Printf("已迁移 %d 个笔记文件到配置目录\n", migrated)
+	}
+}
+
 // DeleteTool 删除工具
 func (a *App) DeleteTool(toolName, categoryName string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	var categories Categories
 	var config Config
 
@@ -702,7 +798,7 @@ func (a *App) OpenDirectoryDialog() (string, error) {
 
 // UpdateTool 更新工具信息
 func (a *App) UpdateTool(originalName, categoryName string, tool Tool) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -775,7 +871,7 @@ func (a *App) UpdateTool(originalName, categoryName string, tool Tool) error {
 
 // AddCategory 添加新分类
 func (a *App) AddCategory(categoryName string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -813,7 +909,7 @@ func (a *App) AddCategory(categoryName string) error {
 
 // DeleteCategory 删除分类及其下的所有工具
 func (a *App) DeleteCategory(categoryName string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -861,7 +957,7 @@ func (a *App) DeleteCategory(categoryName string) error {
 
 // UpdateCategoryTools 批量更新分类下工具顺序
 func (a *App) UpdateCategoryTools(categoryName string, tools []Tool) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	var categories Categories
 	var config Config
 
@@ -899,7 +995,7 @@ func (a *App) UpdateCategoryTools(categoryName string, tools []Tool) error {
 
 // UpdateToolDescription 更新工具描述
 func (a *App) UpdateToolDescription(toolName, categoryName, description string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -1097,8 +1193,8 @@ func (a *App) DeleteToolNote(toolPath, toolName string) error {
 
 // findAndMigrateOldNote 查找并迁移旧位置的笔记
 func (a *App) findAndMigrateOldNote(toolPath, toolName string) string {
-	// 尝试从旧的notes目录查找笔记
-	notesDir := filepath.Join(a.getResourcePath(), "notes")
+	// 从配置目录下的 notes 查找笔记
+	notesDir := a.getNotesDir()
 
 	// 生成可能的旧笔记ID
 	pathParts := strings.Split(toolPath, "/")
@@ -1399,7 +1495,7 @@ type CategoryInfo struct {
 
 // loadExistingCategories 读取现有的分类配置
 func (a *App) loadExistingCategories() (map[string]CategoryInfo, error) {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	existingCategories := make(map[string]CategoryInfo)
 
 	// 读取现有配置
@@ -1732,7 +1828,7 @@ func (a *App) SelectJavaPath() (string, error) {
 
 // GetNewToolsFromScanned 获取真正的新工具（过滤掉已存在的）
 func (a *App) GetNewToolsFromScanned(tools []ScannedTool) ([]ScannedTool, error) {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 	var categories Categories
 	var config Config
 
@@ -1807,7 +1903,7 @@ func (a *App) GetNewToolsFromScanned(tools []ScannedTool) ([]ScannedTool, error)
 
 // AutoAddScannedTools 自动添加扫描到的工具
 func (a *App) AutoAddScannedTools(tools []ScannedTool) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	var categories Categories
@@ -1931,7 +2027,7 @@ func (a *App) AutoAddScannedTools(tools []ScannedTool) error {
 
 // saveCategoriesToFile 保存分类配置到文件
 func (a *App) saveCategoriesToFile(categories Categories, config Config) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 确保配置文件所在目录存在
 	configDir := filepath.Dir(configPath)
@@ -2072,7 +2168,7 @@ func (a *App) validateConfigFile(configPath string) error {
 
 // UpdateCategoryName 更新分类名称
 func (a *App) UpdateCategoryName(oldName, newName string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -2110,7 +2206,7 @@ func (a *App) UpdateCategoryName(oldName, newName string) error {
 
 // UpdateCategoriesOrder 更新分类顺序
 func (a *App) UpdateCategoriesOrder(orderedCategories []Category) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	var config Config
@@ -2137,7 +2233,7 @@ func (a *App) UpdateCategoriesOrder(orderedCategories []Category) error {
 
 // UpdateCategoryIcon 更新分类图标
 func (a *App) UpdateCategoryIcon(categoryName, icon string) error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取原始YAML内容
 	data, err := ioutil.ReadFile(configPath)
@@ -2313,7 +2409,7 @@ func (a *App) DebugAllToolPaths() error {
 
 // CleanupToolPaths 清理和修复工具路径
 func (a *App) CleanupToolPaths() error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	data, err := ioutil.ReadFile(configPath)
@@ -2413,7 +2509,7 @@ func (a *App) cleanToolPath(path string) string {
 
 // RepairConfigFile 修复损坏的配置文件
 func (a *App) RepairConfigFile() error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 首先验证当前配置文件是否正常
 	if err := a.validateConfigFile(configPath); err == nil {
@@ -2479,7 +2575,7 @@ func (a *App) RepairConfigFile() error {
 
 // CleanupDuplicateTools 清理重复的工具
 func (a *App) CleanupDuplicateTools() error {
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	var config Config
@@ -2633,7 +2729,7 @@ func (a *App) cleanInvalidToolPathsWithResult() (CleanupResult, error) {
 		InvalidToolNames: []string{},
 	}
 
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	var config Config
@@ -2775,7 +2871,7 @@ func (a *App) cleanToolNote(tool Tool) bool {
 			toolId = strings.ReplaceAll(toolId, "-", "_")
 
 			// 尝试删除对应的笔记文件
-			notesDir := filepath.Join(a.getResourcePath(), "notes")
+			notesDir := a.getNotesDir()
 			noteFile := filepath.Join(notesDir, fmt.Sprintf("%s.md", toolId))
 
 			if _, err := os.Stat(noteFile); err == nil {
@@ -2796,7 +2892,7 @@ func (a *App) cleanInvalidToolPathsWithMigration(scannedTools []ScannedTool) (Cl
 		MigratedToolNames: []string{},
 	}
 
-	configPath := filepath.Join(a.getResourcePath(), "tool.yml")
+	configPath := a.getConfigPath()
 
 	// 读取现有配置
 	var config Config
@@ -2979,7 +3075,7 @@ func (a *App) migrateToolNote(tool Tool, toolDirName string) bool {
 	toolId := strings.ReplaceAll(toolDirName, " ", "_")
 	toolId = strings.ReplaceAll(toolId, "-", "_")
 
-	notesDir := filepath.Join(a.getResourcePath(), "notes")
+	notesDir := a.getNotesDir()
 	noteFile := filepath.Join(notesDir, fmt.Sprintf("%s.md", toolId))
 
 	if _, err := os.Stat(noteFile); err == nil {
