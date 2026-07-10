@@ -852,9 +852,3 @@ Spear.app/Contents/Resources/resources/webshell/AntSword/antSword-2.1.15
 与 Mac 版本基本相同，只是增加了 Python 环境及一些常用 Python 工具。支持自定义添加 Python、Java、GUI 程序等功能，用户可以根据自己的需求选择工具管理方式。
 
 ------
-
-## 公众号
-
-![公众号二维码](https://github.com/user-attachments/assets/8d233519-0f1e-49bc-9b2a-c46ded91bbf9)
-
-------
