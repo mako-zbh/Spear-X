@@ -639,5 +639,10 @@ wails build -clean
 > - macOS: `~/Library/Application Support/SpearX/notes/` - 笔记文件
 > - 工具目录中的 `.md` 笔记文件
 
+---
+
+## 致谢
+
+本项目基于 [sspsec/Spear](https://github.com/sspsec/Spear) 二次开发，感谢原项目作者 [Spe4r](https://github.com/sspsec) 的开源贡献。
 
 
