@@ -2402,6 +2402,12 @@ export default {
             editDialog.tool.value = 'Open';
           }
           editDialog.tool.command = '';
+        } else if (file.isExecutable && !file.extension) {
+          // 无扩展名的二进制可执行文件
+          if (editDialog.tool.value !== 'Binary') {
+            editDialog.tool.value = 'Binary';
+          }
+          editDialog.tool.command = '';
         } else {
           // 其他文件类型默认用系统打开
           if (editDialog.tool.value !== 'Open' && editDialog.tool.value !== 'custom') {
@@ -2542,6 +2548,12 @@ export default {
           } else if (fileName.endsWith('.app') || fileName.endsWith('.exe')) {
             if (editDialog.tool.value !== 'Open' && editDialog.tool.value !== 'custom') {
               editDialog.tool.value = 'Open';
+            }
+            editDialog.tool.command = '';
+          } else if (!fileName.includes('.')) {
+            // 无扩展名的二进制可执行文件
+            if (editDialog.tool.value !== 'Binary') {
+              editDialog.tool.value = 'Binary';
             }
             editDialog.tool.command = '';
           }
