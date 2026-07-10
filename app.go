@@ -348,6 +348,20 @@ func (a *App) ExecuteCommandWithCustom(path, optional, value, filename, customCo
 		}
 		return nil
 
+	case "Binary":
+		binaryPath := filepath.Join(toolPath, filename)
+		if _, err := os.Stat(binaryPath); err != nil {
+			return fmt.Errorf("二进制文件不存在: %s", binaryPath)
+		}
+		binCmd := exec.Command(binaryPath)
+		binCmd.Dir = toolPath
+		setHideWindow(binCmd)
+		if err := binCmd.Start(); err != nil {
+			return fmt.Errorf("启动二进制文件失败: %v", err)
+		}
+		fmt.Printf("二进制文件已后台启动, PID: %d\n", binCmd.Process.Pid)
+		return nil
+
 	default:
 		return fmt.Errorf("不支持的命令类型: %s", value)
 	}
@@ -698,7 +712,7 @@ func (a *App) OpenToolDirectory(path string) error {
 
 // GetToolTypes 获取支持的工具类型
 func (a *App) GetToolTypes() []string {
-	return []string{"Java8", "Java11", "Open", "Browser", "openterm"}
+	return []string{"Java8", "Java11", "Java17", "Open", "openterm", "Browser", "Binary"}
 }
 
 // GetToolAbsolutePath 获取工具的绝对路径
@@ -1644,9 +1658,10 @@ func (a *App) analyzeToolDirectory(toolDir string) (toolType string, fileName st
 		return "openterm", "", ""
 	}
 
-	// 查找jar文件和app文件
+	// 查找jar文件、二进制文件和app文件
 	var jarFiles []string
 	var appFiles []string
+	var binFiles []string
 
 	for _, file := range files {
 		fileName := strings.ToLower(file.Name())
@@ -1662,13 +1677,19 @@ func (a *App) analyzeToolDirectory(toolDir string) (toolType string, fileName st
 		// 检查jar文件
 		if strings.HasSuffix(fileName, ".jar") {
 			jarFiles = append(jarFiles, file.Name())
+		} else if !file.IsDir() && a.isBinaryExecutable(file.Name()) && file.Mode()&0111 != 0 {
+			// 二进制可执行文件
+			binFiles = append(binFiles, file.Name())
 		}
 	}
 
-	// 优先级：jar > app > 其他
+	// 优先级：jar > 二进制 > app > 其他
 	if len(jarFiles) > 0 {
-		// 如果有jar文件，选择第一个jar文件，使用Java8打开
 		return "Java8", jarFiles[0], "-jar"
+	}
+
+	if len(binFiles) > 0 {
+		return "Binary", binFiles[0], ""
 	}
 
 	if len(appFiles) > 0 {
@@ -1729,15 +1750,15 @@ func (a *App) setExecutionType(tool *Tool, fileName string) {
 	lowerFileName := strings.ToLower(fileName)
 
 	if strings.HasSuffix(lowerFileName, ".jar") {
-		// jar文件默认用Java8打开
 		tool.Value = "Java8"
 		tool.Command = "-jar"
 	} else if strings.HasSuffix(lowerFileName, ".app") {
-		// app文件默认用Open打开
 		tool.Value = "Open"
 		tool.Command = ""
+	} else if a.isBinaryExecutable(fileName) {
+		tool.Value = "Binary"
+		tool.Command = ""
 	} else {
-		// 其他文件（包括.exe、.sh、.py、无扩展名的二进制文件等）都使用openterm打开
 		tool.Value = "openterm"
 		tool.Command = ""
 	}
