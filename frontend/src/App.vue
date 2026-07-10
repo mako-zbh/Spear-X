@@ -602,6 +602,15 @@
                 </div>
               </el-option>
               
+              <el-option value="Binary">
+                <div class="execution-option">
+                  <el-icon class="option-icon binary-icon"><Document /></el-icon>
+                  <div class="option-content">
+                    <div class="option-title">二进制文件</div>
+                  </div>
+                </div>
+              </el-option>
+              
 
             </el-select>
           </el-form-item>
@@ -1742,6 +1751,7 @@ export default {
         'Open': '📱',       // 打开文件图标
         'openterm': '🖥️',   // 终端图标
         'Browser': '🌐',    // 浏览器图标
+        'Binary': '⚡',     // 二进制文件图标
         'custom': '⚙️'      // 自定义命令图标
       };
       return iconMap[toolType] || '🔧';
@@ -1772,7 +1782,8 @@ export default {
         'Java11': 'warning', 
         'Java17': 'warning',
         'Open': 'success',
-        'openterm': 'info'
+        'openterm': 'info',
+        'Binary': ''
       };
       return typeMap[value] || 'primary';
     };
@@ -2292,7 +2303,8 @@ export default {
         'Java11': 'Java 11', 
         'Java17': 'Java 17',
         'Open': '系统打开',
-        'openterm': '终端打开'
+        'openterm': '终端打开',
+        'Binary': '二进制文件'
       };
       return labels[type] || type;
     };
