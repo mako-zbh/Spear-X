@@ -4,7 +4,7 @@
 
 <img src="https://img.shields.io/badge/SpearX-Tool%20Manager-6366f1?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K" alt="SpearX Logo" />
 
-[![Wails](https://img.shields.io/badge/Wails-v2.10.1-FF6B6B?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSI+CjxwYXRoIGQ9Ik0xMiAyTDEzLjA5IDguMjZMMjAgOUwxMy4wOSAxNS43NEwxMiAyMkwxMC45MSAxNS43NEw0IDlMMTAuOTEgOC4yNkwxMiAyWiIgZmlsbD0iI0ZGNkI2QiIvPgo8L3N2Zz4K)](https://wails.io/)
+[![Wails](https://img.shields.io/badge/Wails-v3.0-6366f1?style=flat&logo=wails)](https://wails.io/)
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://golang.org/)
 [![Vue 3](https://img.shields.io/badge/Vue.js-3.0+-4FC08D?style=flat&logo=vue.js)](https://vuejs.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=flat)](LICENSE)
@@ -13,7 +13,7 @@
 **集成多种工具类型，支持智能分类管理和一键执行**  
 **在极简中发现极致，在安静中感受力量。**
 
-**Created by Spe4r** ⚡
+**Created by zbh** ⚡
 
 [📖 功能特性](#-功能特性) • [🚀 快速开始](#-快速开始) • [📚 使用指南](#-使用指南) • [🔨 开发构建](#-开发构建) • [🤝 贡献指南](#-贡献指南)
 
@@ -53,7 +53,7 @@
   - 🔄 自动扫描发现工具
 
 - **🎨 现代化界面**
-  - 🌟 毛玻璃效果 
+  - 🌟 Liquid Glass 效果 
   - 🎭 流畅动画交互
   - 📱 响应式设计
   - 🌙 优雅的视觉效果
@@ -82,7 +82,7 @@
 
 | 平台        | 最低版本       |
 | ----------- | -------------- |
-| **macOS**   | 10.15 Catalina |
+| **macOS**   | 15.0 及以上      |
 
 ### 📦 安装方式
 
@@ -97,14 +97,14 @@
 git clone https://github.com/sspsec/Spear.git
 cd spear-x
 
-# 2. 安装 Wails CLI (如果未安装)
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+# 2. 安装 Wails v3 CLI
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
-# 3. 构建应用
-wails build -platform darwin/amd64 -clean
+# 3. 构建并打包 .app
+wails3 task package
 
 # 4. 运行应用
-./build/bin/SpearX
+open bin/SpearX.app
 ```
 
 ### ⚡ 快速体验
@@ -513,29 +513,37 @@ JavaPaths:
 # 必需工具
 Go 1.24+                    # 后端开发语言
 Node.js 18+                 # 前端构建工具
-Wails CLI v2.10.1           # 桌面应用框架
+Wails CLI v3                # 桌面应用框架
 
 # 安装 Wails CLI
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
+go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
 # 验证安装
-wails doctor
+wails3 doctor
 ```
 
 ### 📦 生产构建
 
 ```bash
-# 构建当前平台
-wails build
+# macOS 构建并打包 .app
+wails3 task package
 
-# 跨平台构建
-wails build -platform darwin/arm64    # macOS Apple Silicon
-wails build -platform darwin/amd64    # macOS Intel
-wails build -platform windows/amd64   # Windows 64位
-wails build -platform linux/amd64     # Linux 64位
+# 仅构建二进制（不打包 .app）
+wails3 task build
 
-# 构建后清理
-wails build -clean
+# 先构建再打包
+wails3 build
+
+# Windows 构建
+wails3 task windows:build        # 构建 .exe
+wails3 task windows:package      # 构建并打包安装包
+
+# Linux 构建
+wails3 task linux:build
+wails3 task linux:package
+
+# 开发模式（热重载）
+wails3 dev
 ```
 
 ### 🔧 技术栈
@@ -544,14 +552,14 @@ wails build -clean
 - **框架**: Vue 3 + Composition API
 - **UI 库**: Element Plus
 - **构建工具**: Vite
-- **样式**: CSS3 + 毛玻璃效果
+- **样式**: CSS3 + Liquid Glass 效果
 - **图标**: Element Plus Icons
 
 #### 后端技术
-- **语言**: Go 1.24
-- **框架**: Wails v2
+- **语言**: Go 1.25
+- **框架**: Wails v3
 - **配置**: YAML
-- **依赖**: 标准库为主
+- **构建**: Taskfile
 
 ## 🏗️ 架构设计
 
@@ -565,7 +573,7 @@ wails build -clean
 │ • UI 组件       │    │ • 工具管理      │
 │ • 状态管理      │    │ • 文件操作      │
 │ • 事件处理      │    │ • 命令执行      │
-│ • 毛玻璃效果    │    │ • 配置管理      │
+│ • Liquid Glass 效果    │    │ • 配置管理      │
 └─────────────────┘    └─────────────────┘
          ▲                       ▲
          │      Wails Bridge     │
