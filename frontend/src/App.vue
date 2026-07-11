@@ -2972,6 +2972,7 @@ body,
 }
 
 .app-wrapper {
+  position: relative;
   display: flex;
   min-height: 100vh;
   height: 100vh;
@@ -4292,19 +4293,28 @@ body,
   }
 }
 
-/* 对话框样式 */
-.el-dialog {
-  margin: 0 !important;
-  position: fixed !important;
-  max-height: 90vh;
-  overflow-y: auto;
+/* 对话框样式 - 垂直水平居中 */
+.el-overlay-dialog {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: auto !important;
 }
 
 .el-dialog__wrapper {
-  overflow: visible !important;
   display: flex !important;
-  align-items: center;
-  justify-content: center;
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: visible !important;
+  margin: 0 !important;
+}
+
+.el-dialog {
+  margin: 0 auto !important;
+  margin-top: 0 !important;
+  position: relative !important;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .el-dialog .el-form-item__label {
