@@ -5443,65 +5443,59 @@ body,
 }
 
 .edit-tool-card .el-input .el-input__wrapper {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
   border-radius: 8px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .edit-tool-card .el-input .el-input__wrapper:hover {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  background: #fafafa !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .edit-tool-card .el-input .el-input__wrapper.is-focus {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: #ffffff !important;
   border-color: rgba(10, 132, 255, 0.8) !important;
   box-shadow: 
-    0 0 0 3px rgba(10, 132, 255, 0.2),
-    0 2px 12px rgba(0, 0, 0, 0.4);
+    0 0 0 3px rgba(10, 132, 255, 0.15),
+    0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 .edit-tool-card .el-input .el-input__inner {
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: rgba(0, 0, 0, 0.85) !important;
   font-size: 14px;
   font-weight: 400;
 }
 
 .edit-tool-card .el-input .el-input__inner::placeholder {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(0, 0, 0, 0.35) !important;
 }
 
 .edit-tool-card .el-select .el-input__wrapper {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
   border-radius: 8px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .edit-tool-card .el-textarea .el-textarea__inner {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.95) !important;
+  color: rgba(0, 0, 0, 0.85) !important;
   font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .edit-tool-card .el-textarea .el-textarea__inner:focus {
-  background: rgba(255, 255, 255, 0.15) !important;
+  background: #ffffff !important;
   border-color: rgba(10, 132, 255, 0.8) !important;
   box-shadow: 
-    0 0 0 3px rgba(10, 132, 255, 0.2),
-    0 2px 12px rgba(0, 0, 0, 0.4);
+    0 0 0 3px rgba(10, 132, 255, 0.15),
+    0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* 执行选项卡片样式 */
