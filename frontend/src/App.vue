@@ -3329,17 +3329,17 @@ body,
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.dark-icon-popover .el-input :deep(.el-input__wrapper) {
+.dark-icon-popover .el-input .el-input__wrapper {
   background: rgba(255, 255, 255, 0.1) !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   border-radius: 6px;
 }
 
-.dark-icon-popover .el-input :deep(.el-input__inner) {
+.dark-icon-popover .el-input .el-input__inner {
   color: #ffffff !important;
 }
 
-.dark-icon-popover .el-input :deep(.el-input__inner)::placeholder {
+.dark-icon-popover .el-input .el-input__inner::placeholder {
   color: rgba(255, 255, 255, 0.5) !important;
 }
 
@@ -3558,18 +3558,18 @@ body,
 }
 
 /* 清除按钮样式 */
-.ios-search :deep(.el-input__suffix) {
+.ios-search .el-input__suffix {
   right: 12px;
   position: relative;
   z-index: 2;
 }
 
-.ios-search :deep(.el-input__clear) {
+.ios-search .el-input__clear {
   color: rgba(255, 255, 255, 0.6);
   font-size: 16px;
 }
 
-.ios-search :deep(.el-input__clear):hover {
+.ios-search .el-input__clear:hover {
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -4293,21 +4293,21 @@ body,
 }
 
 /* 对话框样式 */
-:deep(.el-dialog) {
+.el-dialog {
   margin: 0 !important;
   position: fixed !important;
   max-height: 90vh;
   overflow-y: auto;
 }
 
-:deep(.el-dialog__wrapper) {
+.el-dialog__wrapper {
   overflow: visible !important;
   display: flex !important;
   align-items: center;
   justify-content: center;
 }
 
-.el-dialog :deep(.el-form-item__label) {
+.el-dialog .el-form-item__label {
   color: rgba(255, 255, 255, 0.9);
 }
 
@@ -4469,7 +4469,7 @@ body,
 }
 
 /* 优化搜索框的焦点样式 */
-.search-bar .el-input :deep(.el-input__wrapper.is-focus) {
+.search-bar .el-input .el-input__wrapper.is-focus {
   box-shadow: 0 0 0 1px var(--primary-color) inset;
   border-color: var(--primary-color);
   background-color: rgba(255, 255, 255, 0.15);
@@ -5442,7 +5442,7 @@ body,
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-.edit-tool-card .el-input :deep(.el-input__wrapper) {
+.edit-tool-card .el-input .el-input__wrapper {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   border-radius: 8px;
@@ -5452,13 +5452,13 @@ body,
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.edit-tool-card .el-input :deep(.el-input__wrapper:hover) {
+.edit-tool-card .el-input .el-input__wrapper:hover {
   background: rgba(255, 255, 255, 0.12) !important;
   border-color: rgba(255, 255, 255, 0.25) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
-.edit-tool-card .el-input :deep(.el-input__wrapper.is-focus) {
+.edit-tool-card .el-input .el-input__wrapper.is-focus {
   background: rgba(255, 255, 255, 0.15) !important;
   border-color: rgba(10, 132, 255, 0.8) !important;
   box-shadow: 
@@ -5466,17 +5466,17 @@ body,
     0 2px 12px rgba(0, 0, 0, 0.4);
 }
 
-.edit-tool-card .el-input :deep(.el-input__inner) {
+.edit-tool-card .el-input .el-input__inner {
   color: rgba(255, 255, 255, 0.95) !important;
   font-size: 14px;
   font-weight: 400;
 }
 
-.edit-tool-card .el-input :deep(.el-input__inner::placeholder) {
+.edit-tool-card .el-input .el-input__inner::placeholder {
   color: rgba(255, 255, 255, 0.5) !important;
 }
 
-.edit-tool-card .el-select :deep(.el-input__wrapper) {
+.edit-tool-card .el-select .el-input__wrapper {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   border-radius: 8px;
@@ -5485,7 +5485,7 @@ body,
   -webkit-backdrop-filter: blur(10px);
 }
 
-.edit-tool-card .el-textarea :deep(.el-textarea__inner) {
+.edit-tool-card .el-textarea .el-textarea__inner {
   background: rgba(255, 255, 255, 0.08) !important;
   border: 1px solid rgba(255, 255, 255, 0.15) !important;
   border-radius: 8px;
@@ -5496,7 +5496,7 @@ body,
   -webkit-backdrop-filter: blur(10px);
 }
 
-.edit-tool-card .el-textarea :deep(.el-textarea__inner:focus) {
+.edit-tool-card .el-textarea .el-textarea__inner:focus {
   background: rgba(255, 255, 255, 0.15) !important;
   border-color: rgba(10, 132, 255, 0.8) !important;
   box-shadow: 
@@ -5885,7 +5885,7 @@ body,
    ======================================== */
 
 /* 优化所有对话框的文字排版 - 暗色系 */
-:deep(.el-dialog .el-form-item__label) {
+.el-dialog .el-form-item__label {
   color: rgba(255, 255, 255, 0.9) !important;
   font-weight: 500;
   font-size: 14px;
@@ -5918,7 +5918,7 @@ body,
 }
 
 /* 优化按钮的统一样式 */
-:deep(.el-button) {
+.el-button {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   letter-spacing: -0.2px;
   font-weight: 500;
