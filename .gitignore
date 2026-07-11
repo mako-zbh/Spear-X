@@ -1,5 +1,6 @@
 # Build output
 build/
+bin/
 frontend/dist/
 
 # Dependencies
@@ -22,3 +23,6 @@ frontend/vite.config.js.timestamp-*
 # Compiled go test binary
 *.test
 *.out
+
+.task/
+.zcode/

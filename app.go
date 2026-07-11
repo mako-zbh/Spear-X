@@ -11,24 +11,20 @@ import (
 	"strings"
 	"time"
 
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 	"gopkg.in/yaml.v3"
 )
 
 // App struct
-type App struct {
-	ctx context.Context
-}
+type App struct{}
 
 // NewApp 创建新的 App 应用
 func NewApp() *App {
 	return &App{}
 }
 
-// startup 在应用启动时调用
-func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
-
+// ServiceStartup 在应用启动时调用（Wails v3 生命周期）
+func (a *App) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
 	// 首次启动：确保配置文件存在（不存在则创建或从旧位置迁移）
 	if err := a.ensureConfigExists(); err != nil {
 		fmt.Printf("初始化配置文件失败: %v\n", err)
@@ -57,6 +53,8 @@ func (a *App) startup(ctx context.Context) {
 
 		fmt.Println("启动时配置检查和修复完成")
 	}()
+
+	return nil
 }
 
 // JavaConfig Java配置结构体
@@ -496,7 +494,7 @@ func (a *App) AddTool(tool Tool, categoryName string) error {
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "tool-added", true)
+	application.Get().Event.Emit("tool-added", true)
 	return nil
 }
 
@@ -778,12 +776,9 @@ func (a *App) GetFileInfo(filePath string) (map[string]string, error) {
 
 // OpenFileDialog 打开文件选择对话框
 func (a *App) OpenFileDialog() (map[string]string, error) {
-	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		DefaultDirectory: "",
-		DefaultFilename:  "",
-		Title:            "选择工具文件",
-		// 不设置Filters，这样可以选择任意文件包括二进制文件
-	})
+	filePath, err := application.Get().Dialog.OpenFile().
+		SetTitle("选择工具文件").
+		PromptForSingleSelection()
 
 	if err != nil {
 		return nil, fmt.Errorf("选择文件失败: %v", err)
@@ -798,16 +793,64 @@ func (a *App) OpenFileDialog() (map[string]string, error) {
 
 // OpenDirectoryDialog 打开目录选择对话框
 func (a *App) OpenDirectoryDialog() (string, error) {
-	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		DefaultDirectory: "",
-		Title:            "选择工具目录",
-	})
+	dirPath, err := application.Get().Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle("选择工具目录").
+		PromptForSingleSelection()
 
 	if err != nil {
 		return "", fmt.Errorf("选择目录失败: %v", err)
 	}
 
 	return dirPath, nil
+}
+
+// Select 打开文件/目录选择对话框（限制在 App 包内 resources 目录下）
+func (a *App) Select(selectFolder bool) (string, error) {
+	if selectFolder {
+		dialog, err := application.Get().Dialog.OpenFile().
+			CanChooseDirectories(true).
+			CanChooseFiles(false).
+			SetTitle("选择工具").
+			SetDirectory("/Applications/Spear.app/Contents/Resources").
+			PromptForSingleSelection()
+		if err != nil {
+			return "", err
+		}
+		// 验证路径
+		if !strings.Contains(dialog, "Contents/Resources") {
+			return "", fmt.Errorf("无效的工具路径：必须位于 App包内 resources 目录下")
+		}
+		// 提取相对路径
+		parts := strings.Split(dialog, "Contents/Resources/")
+		if len(parts) != 2 {
+			return "", fmt.Errorf("无法解析工具路径")
+		}
+		return parts[1], nil
+	}
+
+	// 选择文件
+	dialog, err := application.Get().Dialog.OpenFile().
+		SetTitle("选择工具").
+		SetDirectory("/Applications/Spear.app/Contents/Resources").
+		PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+
+	// 验证路径
+	if !strings.Contains(dialog, "Contents/Resources") {
+		return "", fmt.Errorf("无效的工具路径：必须位于 App包内 resources 目录下")
+	}
+
+	// 提取相对路径
+	parts := strings.Split(dialog, "Contents/Resources/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("无法解析工具路径")
+	}
+
+	return parts[1], nil
 }
 
 // UpdateTool 更新工具信息
@@ -879,7 +922,7 @@ func (a *App) UpdateTool(originalName, categoryName string, tool Tool) error {
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "tool-updated", true)
+	application.Get().Event.Emit("tool-updated", true)
 	return nil
 }
 
@@ -965,7 +1008,7 @@ func (a *App) DeleteCategory(categoryName string) error {
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "category-deleted", true)
+	application.Get().Event.Emit("category-deleted", true)
 	return nil
 }
 
@@ -1003,7 +1046,7 @@ func (a *App) UpdateCategoryTools(categoryName string, tools []Tool) error {
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "tool-updated", true)
+	application.Get().Event.Emit("tool-updated", true)
 	return nil
 }
 
@@ -1055,7 +1098,7 @@ func (a *App) UpdateToolDescription(toolName, categoryName, description string) 
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "tool-updated", true)
+	application.Get().Event.Emit("tool-updated", true)
 	return nil
 }
 
@@ -1796,10 +1839,12 @@ func (a *App) selectBestExecutableFile(files []string) string {
 
 // SelectDirectory 选择目录（用于前端文件夹选择器）
 func (a *App) SelectDirectory() (string, error) {
-	// 使用Wails运行时打开文件夹选择对话框
-	selectedPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "选择要扫描的文件夹",
-	})
+	// 使用Wails v3运行时打开文件夹选择对话框
+	selectedPath, err := application.Get().Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		SetTitle("选择要扫描的文件夹").
+		PromptForSingleSelection()
 
 	if err != nil {
 		return "", fmt.Errorf("打开文件夹选择对话框失败: %v", err)
@@ -1810,11 +1855,10 @@ func (a *App) SelectDirectory() (string, error) {
 
 // SelectFile 选择文件
 func (a *App) SelectFile() (string, error) {
-	// 使用Wails运行时打开文件选择对话框
-	selectedFile, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "选择文件",
-		// 不设置Filters，这样可以选择任意文件包括二进制文件
-	})
+	// 使用Wails v3运行时打开文件选择对话框
+	selectedFile, err := application.Get().Dialog.OpenFile().
+		SetTitle("选择文件").
+		PromptForSingleSelection()
 
 	if err != nil {
 		return "", fmt.Errorf("打开文件选择对话框失败: %v", err)
@@ -1835,10 +1879,9 @@ func (a *App) OpenGitHubPage() error {
 // SelectJavaPath 选择Java路径（选择具体的Java可执行文件）
 func (a *App) SelectJavaPath() (string, error) {
 	// 直接选择Java可执行文件
-	selectedFile, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "选择Java可执行文件",
-		// 不设置Filters，这样可以选择任意文件包括二进制的java可执行文件
-	})
+	selectedFile, err := application.Get().Dialog.OpenFile().
+		SetTitle("选择Java可执行文件").
+		PromptForSingleSelection()
 
 	if err != nil {
 		return "", fmt.Errorf("选择Java路径失败: %v", err)
@@ -2143,7 +2186,7 @@ func (a *App) saveCategoriesToFile(categories Categories, config Config) error {
 	}
 
 	// 发送更新成功事件
-	wailsRuntime.EventsEmit(a.ctx, "tools-scanned", true)
+	application.Get().Event.Emit("tools-scanned", true)
 	return nil
 }
 

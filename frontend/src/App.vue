@@ -732,6 +732,42 @@ import {
   InfoFilled
 } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
+import { Events } from '@wailsio/runtime'
+import {
+  AddCategory,
+  AddTool,
+  AutoAddScannedTools,
+  CleanInvalidPaths,
+  CleanupToolPaths,
+  DebugAllToolPaths,
+  DeleteCategory,
+  DeleteTool,
+  DeleteToolNote,
+  ExecuteCommand,
+  ExecuteCustomCommand,
+  GetAllTags,
+  GetCategories,
+  GetJavaConfig,
+  GetNewToolsFromScanned,
+  GetToolAbsolutePath,
+  GetToolDirectory,
+  GetToolNote,
+  GetToolTypes,
+  OpenGitHubPage,
+  OpenToolDirectory,
+  SaveJavaConfig,
+  SaveToolNote,
+  ScanCustomDirectoryForTools,
+  ScanResourcesForTools,
+  SelectDirectory,
+  SelectFile,
+  SelectJavaPath,
+  UpdateCategoriesOrder,
+  UpdateCategoryIcon,
+  UpdateCategoryName,
+  UpdateCategoryTools,
+  UpdateTool
+} from '../bindings/SSPSecTools/app.js'
 
 export default {
   name: 'App',
@@ -913,7 +949,7 @@ export default {
     // 加载分类和工具列表
     const loadCategories = async () => {
       try {
-        const result = await window.go.main.App.GetCategories();
+        const result = await GetCategories();
         categories.value = result;
         filteredCategories.value = result.categories || result.Category || [];
         sortableCategories.value = [...(result.categories || result.Category || [])];
@@ -926,7 +962,7 @@ export default {
     // 加载所有标签
     const loadAllTags = async () => {
       try {
-        const tags = await window.go.main.App.GetAllTags();
+        const tags = await GetAllTags();
         allTags.value = tags;
       } catch (err) {
         console.error('加载标签失败:', err);
@@ -955,7 +991,7 @@ export default {
         
         if (toolValue === 'custom' || (toolValue === 'openterm' && toolCommand)) {
           // 使用自定义命令（包括openterm有自定义命令的情况）
-          await window.go.main.App.ExecuteCustomCommand(
+          await ExecuteCustomCommand(
             toolPath,
             toolOptional,
             toolValue,
@@ -964,7 +1000,7 @@ export default {
           );
         } else {
           // 使用预定义命令
-        await window.go.main.App.ExecuteCommand(
+        await ExecuteCommand(
             toolPath,
             toolOptional,
             toolValue,
@@ -979,7 +1015,7 @@ export default {
     // 加载工具类型
     const loadToolTypes = async () => {
       try {
-        toolTypes.value = await window.go.main.App.GetToolTypes();
+        toolTypes.value = await GetToolTypes();
       } catch (err) {
         ElMessage.error(`加载工具类型失败: ${err}`);
       }
@@ -1026,13 +1062,13 @@ export default {
 
         
         // 先清理无效路径并获取清理结果
-        const cleanupResult = await window.go.main.App.CleanInvalidPaths();
+        const cleanupResult = await CleanInvalidPaths();
         
         // 扫描所有工具
-        const allScannedTools = await window.go.main.App.ScanResourcesForTools();
+        const allScannedTools = await ScanResourcesForTools();
         
         // 过滤出真正的新工具
-        const newTools = await window.go.main.App.GetNewToolsFromScanned(allScannedTools);
+        const newTools = await GetNewToolsFromScanned(allScannedTools);
         
         // 重新加载工具列表以反映清理结果
         await loadCategories();
@@ -1070,7 +1106,7 @@ export default {
 
           if (confirmResult === 'confirm') {
             // 自动添加新工具
-            await window.go.main.App.AutoAddScannedTools(newTools);
+            await AutoAddScannedTools(newTools);
             ElMessage.success(`成功添加 ${newTools.length} 个新工具`);
             
             // 重新加载工具列表
@@ -1093,16 +1129,16 @@ export default {
     const scanCustomDirectory = async () => {
       try {
         // 选择目录
-        const selectedPath = await window.go.main.App.SelectDirectory();
+        const selectedPath = await SelectDirectory();
         if (!selectedPath) {
           return; // 用户取消选择
         }
 
         // 扫描自定义目录
-        const allScannedTools = await window.go.main.App.ScanCustomDirectoryForTools(selectedPath);
+        const allScannedTools = await ScanCustomDirectoryForTools(selectedPath);
         
         // 过滤出真正的新工具
-        const newTools = await window.go.main.App.GetNewToolsFromScanned(allScannedTools);
+        const newTools = await GetNewToolsFromScanned(allScannedTools);
 
         if (newTools && newTools.length > 0) {
           // 显示扫描结果确认对话框
@@ -1120,7 +1156,7 @@ export default {
 
           if (confirmResult === 'confirm') {
             // 自动添加新工具
-            await window.go.main.App.AutoAddScannedTools(newTools);
+            await AutoAddScannedTools(newTools);
             ElMessage.success(`成功从自定义目录添加 ${newTools.length} 个新工具`);
             
             // 重新加载工具列表
@@ -1139,7 +1175,7 @@ export default {
     const openGitHub = async () => {
       try {
         // 调用后端函数使用macOS默认浏览器打开GitHub链接
-        await window.go.main.App.OpenGitHubPage();
+        await OpenGitHubPage();
         console.log('GitHub页面已打开');
       } catch (err) {
         console.error('打开GitHub页面失败:', err);
@@ -1150,7 +1186,7 @@ export default {
     // 选择工具路径
     const selectToolPath = async () => {
       try {
-        const relativePath = await window.go.main.App.SelectFile();
+        const relativePath = await SelectFile();
         if (relativePath) {
           const pathParts = relativePath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -1228,7 +1264,7 @@ export default {
       if (!contextMenu.selectedTool) return;
       
       try {
-        await window.go.main.App.OpenToolDirectory(contextMenu.selectedTool.Path);
+        await OpenToolDirectory(contextMenu.selectedTool.Path);
         // 成功后再关闭菜单
         contextMenu.visible = false;
       } catch (err) {
@@ -1259,13 +1295,13 @@ export default {
         const toolPath = contextMenu.selectedTool.Path || '';
         const toolName = contextMenu.selectedTool.Name || '';
         try {
-          await window.go.main.App.DeleteToolNote(toolPath, toolName);
+          await DeleteToolNote(toolPath, toolName);
         } catch (noteErr) {
           console.log(`删除笔记失败（可能不存在）: ${noteErr}`);
         }
 
         // 删除工具
-        await window.go.main.App.DeleteTool(
+        await DeleteTool(
           contextMenu.selectedTool.Name,
           contextMenu.selectedCategory
         );
@@ -1314,7 +1350,7 @@ export default {
     // 提交编辑后的工具
     const submitToolEdit = async () => {
       try {
-        await window.go.main.App.UpdateTool(
+        await UpdateTool(
           editDialog.originalName,
           editDialog.category,
           editDialog.tool
@@ -1386,7 +1422,7 @@ export default {
           Tags: editDialog.tool.tags || []
         };
         
-        await window.go.main.App.AddTool(toolToAdd, editDialog.category);
+        await AddTool(toolToAdd, editDialog.category);
         closeEditDialog();
         await loadCategories();
         await loadAllTags();
@@ -1429,7 +1465,7 @@ export default {
           }
         }
         
-        await window.go.main.App.AddTool(newTool, selectedCategory.value);
+        await AddTool(newTool, selectedCategory.value);
 
         await loadCategories();
       } catch (err) {
@@ -1440,7 +1476,7 @@ export default {
     // 选择编辑工具路径
     const selectEditToolPath = async () => {
       try {
-        const relativePath = await window.go.main.App.SelectFile();
+        const relativePath = await SelectFile();
         if (relativePath) {
           const pathParts = relativePath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -1482,7 +1518,7 @@ export default {
     const showJavaConfigDialog = async () => {
       try {
         // 加载当前的Java配置
-        const config = await window.go.main.App.GetJavaConfig();
+        const config = await GetJavaConfig();
         if (config) {
           Object.assign(javaConfigDialog.config, config);
         }
@@ -1496,7 +1532,7 @@ export default {
     // 选择Java路径
     const selectJavaPath = async (javaVersion) => {
       try {
-        const selectedPath = await window.go.main.App.SelectJavaPath();
+        const selectedPath = await SelectJavaPath();
         if (selectedPath) {
           javaConfigDialog.config[javaVersion] = selectedPath;
         }
@@ -1513,7 +1549,7 @@ export default {
     // 保存Java配置
     const saveJavaConfig = async () => {
       try {
-        await window.go.main.App.SaveJavaConfig(javaConfigDialog.config);
+        await SaveJavaConfig(javaConfigDialog.config);
         ElMessage.success('Java配置保存成功');
         javaConfigDialog.visible = false;
       } catch (err) {
@@ -1526,7 +1562,7 @@ export default {
     // 调试所有工具路径
     const debugAllPaths = async () => {
       try {
-        await window.go.main.App.DebugAllToolPaths();
+        await DebugAllToolPaths();
         ElMessage.success('路径调试信息已输出到控制台');
       } catch (err) {
         ElMessage.error(`调试失败: ${err}`);
@@ -1547,7 +1583,7 @@ export default {
         );
 
         if (result === 'confirm') {
-          await window.go.main.App.CleanupToolPaths();
+          await CleanupToolPaths();
           ElMessage.success('路径修复完成，请查看控制台输出');
           await loadCategories(); // 重新加载配置
         }
@@ -1561,7 +1597,7 @@ export default {
     // 删除分类
     const deleteCategory = async (categoryName) => {
       try {
-        await window.go.main.App.DeleteCategory(categoryName);
+        await DeleteCategory(categoryName);
         ElMessage.success('删除成功');
         await loadCategories();
       } catch (err) {
@@ -1686,7 +1722,7 @@ export default {
           // 搜索笔记内容
           let noteMatch = false;
           try {
-            const note = await window.go.main.App.GetToolNote(tool.name);
+            const note = await GetToolNote(tool.name);
             if (note && note.toLowerCase().includes(query)) {
               noteMatch = true;
             }
@@ -1807,7 +1843,7 @@ export default {
         // 调用后端获取绝对路径
         const toolPath = tool.path || tool.Path || '';
         const fileName = tool.fileName || tool.FileName || '';
-        const absolutePath = await window.go.main.App.GetToolAbsolutePath(toolPath, fileName);
+        const absolutePath = await GetToolAbsolutePath(toolPath, fileName);
         
         await navigator.clipboard.writeText(absolutePath);
         ElMessage.success('绝对路径已复制到剪贴板');
@@ -1864,13 +1900,13 @@ export default {
         const toolPath = tool.path || tool.Path || '';
         const toolName = tool.name || tool.Name || '';
         try {
-          await window.go.main.App.DeleteToolNote(toolPath, toolName);
+          await DeleteToolNote(toolPath, toolName);
         } catch (noteErr) {
           console.log(`删除笔记失败（可能不存在）: ${noteErr}`);
         }
 
         // 删除工具
-        await window.go.main.App.DeleteTool(tool.name, categoryName);
+        await DeleteTool(tool.name, categoryName);
         ElMessage.success('工具及笔记删除成功');
         await loadCategories();
         updateCurrentTools();
@@ -1889,7 +1925,7 @@ export default {
     // 通过路径打开工具目录
     const openToolDirectoryByPath = async (path) => {
       try {
-        await window.go.main.App.OpenToolDirectory(path);
+        await OpenToolDirectory(path);
       } catch (err) {
         ElMessage.error(`打开目录失败: ${err.message || err}`);
       }
@@ -1921,7 +1957,7 @@ export default {
           categoryName = `未命名${counter}`;
         }
         
-        await window.go.main.App.AddCategory(categoryName);
+        await AddCategory(categoryName);
         ElMessage.success('分类添加成功，双击可重命名');
         await loadCategories();
       } catch (err) {
@@ -1982,7 +2018,7 @@ export default {
       }
 
       try {
-        await window.go.main.App.UpdateCategoryName(oldName, newName);
+        await UpdateCategoryName(oldName, newName);
         ElMessage.success('分类名称更新成功');
         
         // 如果当前选中的是被更新的分类，更新选中状态
@@ -2029,7 +2065,7 @@ export default {
       }
 
       try {
-        await window.go.main.App.UpdateCategoryIcon(
+        await UpdateCategoryIcon(
           iconPopover.categoryName, 
           iconPopover.selectedIcon
         );
@@ -2049,7 +2085,7 @@ export default {
         categories.value.categories = [...sortableCategories.value];
         
         // 保存新的分类顺序
-        await window.go.main.App.UpdateCategoriesOrder(sortableCategories.value);
+        await UpdateCategoriesOrder(sortableCategories.value);
         ElMessage.success('分类顺序已更新');
       } catch (err) {
         ElMessage.error(`更新分类顺序失败: ${err}`);
@@ -2077,7 +2113,7 @@ export default {
           customClass: 'elegant-confirm-dialog'
         });
 
-        await window.go.main.App.DeleteCategory(categoryName);
+        await DeleteCategory(categoryName);
         ElMessage.success('分类删除成功');
         
         // 如果当前选中的是被删除的分类，切换到全部工具
@@ -2106,7 +2142,7 @@ export default {
         }
         
         // 使用新的API读取笔记（从工具文件夹中）
-        let noteContent = await window.go.main.App.GetToolNote(toolPath, toolName);
+        let noteContent = await GetToolNote(toolPath, toolName);
         
         // 设置笔记对话框数据
         noteDialog.tool = tool;
@@ -2147,7 +2183,7 @@ export default {
           return;
         }
         
-        await window.go.main.App.SaveToolNote(noteDialog.toolPath, noteDialog.toolName, noteDialog.content);
+        await SaveToolNote(noteDialog.toolPath, noteDialog.toolName, noteDialog.content);
         ElMessage.success('笔记保存成功');
         closeNoteDialog();
       } catch (err) {
@@ -2163,7 +2199,7 @@ export default {
         
         if (!toolPath || !toolName) return '';
         
-        const content = await window.go.main.App.GetToolNote(toolPath, toolName);
+        const content = await GetToolNote(toolPath, toolName);
         return content ? content.substring(0, 100) + '...' : '';
       } catch (err) {
         return '';
@@ -2283,7 +2319,7 @@ export default {
           const category = categoryList.find(cat => (cat.name || cat.Name) === selectedCategoryName.value);
           if (category) {
             const categoryName = category.name || category.Name;
-            await window.go.main.App.UpdateCategoryTools(categoryName, currentTools.value);
+            await UpdateCategoryTools(categoryName, currentTools.value);
         ElMessage.success('工具顺序已更新');
           }
         }
@@ -2340,7 +2376,7 @@ export default {
       fileBrowser.loading = true;
       try {
         console.log('前端调用 GetToolDirectory，路径:', editDialog.tool.path);
-        const files = await window.go.main.App.GetToolDirectory(editDialog.tool.path);
+        const files = await GetToolDirectory(editDialog.tool.path);
         fileBrowser.files = files || [];
         fileBrowser.currentPath = editDialog.tool.path;
       } catch (err) {
@@ -2504,7 +2540,7 @@ export default {
     // 选择工具目录
     const selectToolDirectory = async () => {
       try {
-        const selectedPath = await window.go.main.App.SelectDirectory();
+        const selectedPath = await SelectDirectory();
         if (selectedPath) {
           editDialog.tool.path = selectedPath;
           // 重新加载文件浏览器以显示新的目录内容
@@ -2518,7 +2554,7 @@ export default {
     // 选择工具文件
     const selectToolFile = async () => {
       try {
-        const selectedPath = await window.go.main.App.SelectFile();
+        const selectedPath = await SelectFile();
         if (selectedPath) {
           const pathParts = selectedPath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -2677,13 +2713,13 @@ export default {
       await loadCategories();
       await loadAllTags();
       
-      // 监听命令输出
-      window.runtime.EventsOn('command-output', (output) => {
-        outputText.value = output;
+      // 监听命令输出（Wails v3 事件 API，Events.On 返回取消函数）
+      const cancelCommandOutput = Events.On('command-output', (event) => {
+        outputText.value = event.data;
       });
 
       // 监听工具添加成功事件
-      window.runtime.EventsOn('tool-added', () => {
+      const cancelToolAdded = Events.On('tool-added', () => {
         loadCategories();
         loadAllTags();
         showAddDialog.value = false;
@@ -2691,14 +2727,14 @@ export default {
       });
 
       // 监听工具更新成功事件
-      window.runtime.EventsOn('tool-updated', () => {
+      const cancelToolUpdated = Events.On('tool-updated', () => {
         if (silentUpdate.value) return;
         loadCategories();
         loadAllTags();
         editDialog.visible = false;
         ElMessage.success('工具修改成功');
       });
-      
+
       // 监听窗口大小变化，确保网格动态响应
       const handleResize = () => {
         // 防抖处理，避免频繁触发
@@ -2712,13 +2748,17 @@ export default {
           }
         }, 100);
       };
-      
+
       window.addEventListener('resize', handleResize);
-      
+
       // 在组件卸载时移除监听器
       onBeforeUnmount(() => {
         window.removeEventListener('resize', handleResize);
         clearTimeout(handleResize.timer);
+        // 取消 Wails 事件订阅，避免监听器泄漏
+        cancelCommandOutput();
+        cancelToolAdded();
+        cancelToolUpdated();
       });
 
       // 添加全局点击事件监听器
