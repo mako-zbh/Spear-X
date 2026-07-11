@@ -11,7 +11,7 @@
           <!-- SpearX 纯净文字 -->
           <div class="app-name">SpearX</div>
           <!-- 乔布斯式优雅签名 -->
-          <div class="brand-signature">Created by Spe4r</div>
+          <div class="brand-signature">Created by zbh</div>
         </div>
       </div>
       
