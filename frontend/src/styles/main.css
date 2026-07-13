@@ -5,6 +5,9 @@
   --text-secondary: rgba(255, 255, 255, 0.7);
   --text-disabled: rgba(255, 255, 255, 0.45);
   --text-hint: rgba(255, 255, 255, 0.4);
+
+  /* 窗口圆角 */
+  --window-radius: 12px;
   
   /* 字体大小 */
   --font-size-xs: 11px;
@@ -31,9 +34,13 @@
                      'Liberation Mono', 'Courier New', monospace;
 }
 
+html {
+  background: transparent !important;
+}
+
 body {
   margin: 0;
-  background-color: rgba(0, 0, 0, 0) !important;
+  background-color: transparent !important;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
@@ -43,7 +50,7 @@ body {
 
 #app {
   min-height: 100vh;
-  background-color: rgba(0, 0, 0, 0) !important;
+  background-color: transparent !important;
 }
 
 /* 标题样式 */

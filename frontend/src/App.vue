@@ -1,6 +1,9 @@
 
 <template>
   <div class="app-wrapper" :class="{ resizing: isResizing }">
+    <!-- 顶部窗口拖拽条：填充透明 titlebar 区，解决顶部"纯透明"；并恢复拖动窗口能力 -->
+    <div class="titlebar-drag" data-tauri-drag-region></div>
+
     <!-- 左侧分类导航 -->
     <div class="sidebar" :class="{ resizing: isResizing }" :style="{ width: sidebarWidth + 'px' }">
       <div class="sidebar-header">
@@ -732,42 +735,8 @@ import {
   InfoFilled
 } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
-import { Events } from '@wailsio/runtime'
-import {
-  AddCategory,
-  AddTool,
-  AutoAddScannedTools,
-  CleanInvalidPaths,
-  CleanupToolPaths,
-  DebugAllToolPaths,
-  DeleteCategory,
-  DeleteTool,
-  DeleteToolNote,
-  ExecuteCommand,
-  ExecuteCustomCommand,
-  GetAllTags,
-  GetCategories,
-  GetJavaConfig,
-  GetNewToolsFromScanned,
-  GetToolAbsolutePath,
-  GetToolDirectory,
-  GetToolNote,
-  GetToolTypes,
-  OpenGitHubPage,
-  OpenToolDirectory,
-  SaveJavaConfig,
-  SaveToolNote,
-  ScanCustomDirectoryForTools,
-  ScanResourcesForTools,
-  SelectDirectory,
-  SelectFile,
-  SelectJavaPath,
-  UpdateCategoriesOrder,
-  UpdateCategoryIcon,
-  UpdateCategoryName,
-  UpdateCategoryTools,
-  UpdateTool
-} from '../bindings/SSPSecTools/app.js'
+import { listen } from '@tauri-apps/api/event'
+import * as api from './api'
 
 export default {
   name: 'App',
@@ -949,7 +918,7 @@ export default {
     // 加载分类和工具列表
     const loadCategories = async () => {
       try {
-        const result = await GetCategories();
+        const result = await api.getCategories();
         categories.value = result;
         filteredCategories.value = result.categories || result.Category || [];
         sortableCategories.value = [...(result.categories || result.Category || [])];
@@ -962,7 +931,7 @@ export default {
     // 加载所有标签
     const loadAllTags = async () => {
       try {
-        const tags = await GetAllTags();
+        const tags = await api.getAllTags();
         allTags.value = tags;
       } catch (err) {
         console.error('加载标签失败:', err);
@@ -991,7 +960,7 @@ export default {
         
         if (toolValue === 'custom' || (toolValue === 'openterm' && toolCommand)) {
           // 使用自定义命令（包括openterm有自定义命令的情况）
-          await ExecuteCustomCommand(
+          await api.executeCustomCommand(
             toolPath,
             toolOptional,
             toolValue,
@@ -1000,7 +969,7 @@ export default {
           );
         } else {
           // 使用预定义命令
-        await ExecuteCommand(
+        await api.executeCommand(
             toolPath,
             toolOptional,
             toolValue,
@@ -1015,7 +984,7 @@ export default {
     // 加载工具类型
     const loadToolTypes = async () => {
       try {
-        toolTypes.value = await GetToolTypes();
+        toolTypes.value = await api.getToolTypes();
       } catch (err) {
         ElMessage.error(`加载工具类型失败: ${err}`);
       }
@@ -1062,13 +1031,13 @@ export default {
 
         
         // 先清理无效路径并获取清理结果
-        const cleanupResult = await CleanInvalidPaths();
+        const cleanupResult = await api.cleanInvalidPaths();
         
         // 扫描所有工具
-        const allScannedTools = await ScanResourcesForTools();
+        const allScannedTools = await api.scanResourcesForTools();
         
         // 过滤出真正的新工具
-        const newTools = await GetNewToolsFromScanned(allScannedTools);
+        const newTools = await api.getNewToolsFromScanned(allScannedTools);
         
         // 重新加载工具列表以反映清理结果
         await loadCategories();
@@ -1106,7 +1075,7 @@ export default {
 
           if (confirmResult === 'confirm') {
             // 自动添加新工具
-            await AutoAddScannedTools(newTools);
+            await api.autoAddScannedTools(newTools);
             ElMessage.success(`成功添加 ${newTools.length} 个新工具`);
             
             // 重新加载工具列表
@@ -1129,16 +1098,16 @@ export default {
     const scanCustomDirectory = async () => {
       try {
         // 选择目录
-        const selectedPath = await SelectDirectory();
+        const selectedPath = await api.selectDirectory();
         if (!selectedPath) {
           return; // 用户取消选择
         }
 
         // 扫描自定义目录
-        const allScannedTools = await ScanCustomDirectoryForTools(selectedPath);
+        const allScannedTools = await api.scanCustomDirectoryForTools(selectedPath);
         
         // 过滤出真正的新工具
-        const newTools = await GetNewToolsFromScanned(allScannedTools);
+        const newTools = await api.getNewToolsFromScanned(allScannedTools);
 
         if (newTools && newTools.length > 0) {
           // 显示扫描结果确认对话框
@@ -1156,7 +1125,7 @@ export default {
 
           if (confirmResult === 'confirm') {
             // 自动添加新工具
-            await AutoAddScannedTools(newTools);
+            await api.autoAddScannedTools(newTools);
             ElMessage.success(`成功从自定义目录添加 ${newTools.length} 个新工具`);
             
             // 重新加载工具列表
@@ -1175,7 +1144,7 @@ export default {
     const openGitHub = async () => {
       try {
         // 调用后端函数使用macOS默认浏览器打开GitHub链接
-        await OpenGitHubPage();
+        await api.openGitHubPage();
         console.log('GitHub页面已打开');
       } catch (err) {
         console.error('打开GitHub页面失败:', err);
@@ -1186,7 +1155,7 @@ export default {
     // 选择工具路径
     const selectToolPath = async () => {
       try {
-        const relativePath = await SelectFile();
+        const relativePath = await api.selectFile();
         if (relativePath) {
           const pathParts = relativePath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -1264,7 +1233,7 @@ export default {
       if (!contextMenu.selectedTool) return;
       
       try {
-        await OpenToolDirectory(contextMenu.selectedTool.Path);
+        await api.openToolDirectory(contextMenu.selectedTool.Path);
         // 成功后再关闭菜单
         contextMenu.visible = false;
       } catch (err) {
@@ -1295,13 +1264,13 @@ export default {
         const toolPath = contextMenu.selectedTool.Path || '';
         const toolName = contextMenu.selectedTool.Name || '';
         try {
-          await DeleteToolNote(toolPath, toolName);
+          await api.deleteToolNote(toolPath, toolName);
         } catch (noteErr) {
           console.log(`删除笔记失败（可能不存在）: ${noteErr}`);
         }
 
         // 删除工具
-        await DeleteTool(
+        await api.deleteTool(
           contextMenu.selectedTool.Name,
           contextMenu.selectedCategory
         );
@@ -1350,7 +1319,7 @@ export default {
     // 提交编辑后的工具
     const submitToolEdit = async () => {
       try {
-        await UpdateTool(
+        await api.updateTool(
           editDialog.originalName,
           editDialog.category,
           editDialog.tool
@@ -1422,7 +1391,7 @@ export default {
           Tags: editDialog.tool.tags || []
         };
         
-        await AddTool(toolToAdd, editDialog.category);
+        await api.addTool(toolToAdd, editDialog.category);
         closeEditDialog();
         await loadCategories();
         await loadAllTags();
@@ -1465,7 +1434,7 @@ export default {
           }
         }
         
-        await AddTool(newTool, selectedCategory.value);
+        await api.addTool(newTool, selectedCategory.value);
 
         await loadCategories();
       } catch (err) {
@@ -1476,7 +1445,7 @@ export default {
     // 选择编辑工具路径
     const selectEditToolPath = async () => {
       try {
-        const relativePath = await SelectFile();
+        const relativePath = await api.selectFile();
         if (relativePath) {
           const pathParts = relativePath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -1518,7 +1487,7 @@ export default {
     const showJavaConfigDialog = async () => {
       try {
         // 加载当前的Java配置
-        const config = await GetJavaConfig();
+        const config = await api.getJavaConfig();
         if (config) {
           Object.assign(javaConfigDialog.config, config);
         }
@@ -1532,7 +1501,7 @@ export default {
     // 选择Java路径
     const selectJavaPath = async (javaVersion) => {
       try {
-        const selectedPath = await SelectJavaPath();
+        const selectedPath = await api.selectJavaPath();
         if (selectedPath) {
           javaConfigDialog.config[javaVersion] = selectedPath;
         }
@@ -1549,7 +1518,7 @@ export default {
     // 保存Java配置
     const saveJavaConfig = async () => {
       try {
-        await SaveJavaConfig(javaConfigDialog.config);
+        await api.saveJavaConfig(javaConfigDialog.config);
         ElMessage.success('Java配置保存成功');
         javaConfigDialog.visible = false;
       } catch (err) {
@@ -1562,7 +1531,7 @@ export default {
     // 调试所有工具路径
     const debugAllPaths = async () => {
       try {
-        await DebugAllToolPaths();
+        await api.debugAllToolPaths();
         ElMessage.success('路径调试信息已输出到控制台');
       } catch (err) {
         ElMessage.error(`调试失败: ${err}`);
@@ -1583,7 +1552,7 @@ export default {
         );
 
         if (result === 'confirm') {
-          await CleanupToolPaths();
+          await api.cleanupToolPaths();
           ElMessage.success('路径修复完成，请查看控制台输出');
           await loadCategories(); // 重新加载配置
         }
@@ -1597,7 +1566,7 @@ export default {
     // 删除分类
     const deleteCategory = async (categoryName) => {
       try {
-        await DeleteCategory(categoryName);
+        await api.deleteCategory(categoryName);
         ElMessage.success('删除成功');
         await loadCategories();
       } catch (err) {
@@ -1722,7 +1691,7 @@ export default {
           // 搜索笔记内容
           let noteMatch = false;
           try {
-            const note = await GetToolNote(tool.name);
+            const note = await api.getToolNote(tool.name);
             if (note && note.toLowerCase().includes(query)) {
               noteMatch = true;
             }
@@ -1843,7 +1812,7 @@ export default {
         // 调用后端获取绝对路径
         const toolPath = tool.path || tool.Path || '';
         const fileName = tool.fileName || tool.FileName || '';
-        const absolutePath = await GetToolAbsolutePath(toolPath, fileName);
+        const absolutePath = await api.getToolAbsolutePath(toolPath, fileName);
         
         await navigator.clipboard.writeText(absolutePath);
         ElMessage.success('绝对路径已复制到剪贴板');
@@ -1900,13 +1869,13 @@ export default {
         const toolPath = tool.path || tool.Path || '';
         const toolName = tool.name || tool.Name || '';
         try {
-          await DeleteToolNote(toolPath, toolName);
+          await api.deleteToolNote(toolPath, toolName);
         } catch (noteErr) {
           console.log(`删除笔记失败（可能不存在）: ${noteErr}`);
         }
 
         // 删除工具
-        await DeleteTool(tool.name, categoryName);
+        await api.deleteTool(tool.name, categoryName);
         ElMessage.success('工具及笔记删除成功');
         await loadCategories();
         updateCurrentTools();
@@ -1925,7 +1894,7 @@ export default {
     // 通过路径打开工具目录
     const openToolDirectoryByPath = async (path) => {
       try {
-        await OpenToolDirectory(path);
+        await api.openToolDirectory(path);
       } catch (err) {
         ElMessage.error(`打开目录失败: ${err.message || err}`);
       }
@@ -1957,7 +1926,7 @@ export default {
           categoryName = `未命名${counter}`;
         }
         
-        await AddCategory(categoryName);
+        await api.addCategory(categoryName);
         ElMessage.success('分类添加成功，双击可重命名');
         await loadCategories();
       } catch (err) {
@@ -2018,7 +1987,7 @@ export default {
       }
 
       try {
-        await UpdateCategoryName(oldName, newName);
+        await api.updateCategoryName(oldName, newName);
         ElMessage.success('分类名称更新成功');
         
         // 如果当前选中的是被更新的分类，更新选中状态
@@ -2065,7 +2034,7 @@ export default {
       }
 
       try {
-        await UpdateCategoryIcon(
+        await api.updateCategoryIcon(
           iconPopover.categoryName, 
           iconPopover.selectedIcon
         );
@@ -2085,7 +2054,7 @@ export default {
         categories.value.categories = [...sortableCategories.value];
         
         // 保存新的分类顺序
-        await UpdateCategoriesOrder(sortableCategories.value);
+        await api.updateCategoriesOrder(sortableCategories.value);
         ElMessage.success('分类顺序已更新');
       } catch (err) {
         ElMessage.error(`更新分类顺序失败: ${err}`);
@@ -2113,7 +2082,7 @@ export default {
           customClass: 'elegant-confirm-dialog'
         });
 
-        await DeleteCategory(categoryName);
+        await api.deleteCategory(categoryName);
         ElMessage.success('分类删除成功');
         
         // 如果当前选中的是被删除的分类，切换到全部工具
@@ -2142,7 +2111,7 @@ export default {
         }
         
         // 使用新的API读取笔记（从工具文件夹中）
-        let noteContent = await GetToolNote(toolPath, toolName);
+        let noteContent = await api.getToolNote(toolPath, toolName);
         
         // 设置笔记对话框数据
         noteDialog.tool = tool;
@@ -2183,7 +2152,7 @@ export default {
           return;
         }
         
-        await SaveToolNote(noteDialog.toolPath, noteDialog.toolName, noteDialog.content);
+        await api.saveToolNote(noteDialog.toolPath, noteDialog.toolName, noteDialog.content);
         ElMessage.success('笔记保存成功');
         closeNoteDialog();
       } catch (err) {
@@ -2199,7 +2168,7 @@ export default {
         
         if (!toolPath || !toolName) return '';
         
-        const content = await GetToolNote(toolPath, toolName);
+        const content = await api.getToolNote(toolPath, toolName);
         return content ? content.substring(0, 100) + '...' : '';
       } catch (err) {
         return '';
@@ -2319,7 +2288,7 @@ export default {
           const category = categoryList.find(cat => (cat.name || cat.Name) === selectedCategoryName.value);
           if (category) {
             const categoryName = category.name || category.Name;
-            await UpdateCategoryTools(categoryName, currentTools.value);
+            await api.updateCategoryTools(categoryName, currentTools.value);
         ElMessage.success('工具顺序已更新');
           }
         }
@@ -2376,7 +2345,7 @@ export default {
       fileBrowser.loading = true;
       try {
         console.log('前端调用 GetToolDirectory，路径:', editDialog.tool.path);
-        const files = await GetToolDirectory(editDialog.tool.path);
+        const files = await api.getToolDirectory(editDialog.tool.path);
         fileBrowser.files = files || [];
         fileBrowser.currentPath = editDialog.tool.path;
       } catch (err) {
@@ -2540,7 +2509,7 @@ export default {
     // 选择工具目录
     const selectToolDirectory = async () => {
       try {
-        const selectedPath = await SelectDirectory();
+        const selectedPath = await api.selectDirectory();
         if (selectedPath) {
           editDialog.tool.path = selectedPath;
           // 重新加载文件浏览器以显示新的目录内容
@@ -2554,7 +2523,7 @@ export default {
     // 选择工具文件
     const selectToolFile = async () => {
       try {
-        const selectedPath = await SelectFile();
+        const selectedPath = await api.selectFile();
         if (selectedPath) {
           const pathParts = selectedPath.split('/');
           const fileName = pathParts[pathParts.length - 1];
@@ -2712,14 +2681,9 @@ export default {
       
       await loadCategories();
       await loadAllTags();
-      
-      // 监听命令输出（Wails v3 事件 API，Events.On 返回取消函数）
-      const cancelCommandOutput = Events.On('command-output', (event) => {
-        outputText.value = event.data;
-      });
 
       // 监听工具添加成功事件
-      const cancelToolAdded = Events.On('tool-added', () => {
+      const unlistenToolAdded = await listen('tool-added', () => {
         loadCategories();
         loadAllTags();
         showAddDialog.value = false;
@@ -2727,7 +2691,7 @@ export default {
       });
 
       // 监听工具更新成功事件
-      const cancelToolUpdated = Events.On('tool-updated', () => {
+      const unlistenToolUpdated = await listen('tool-updated', () => {
         if (silentUpdate.value) return;
         loadCategories();
         loadAllTags();
@@ -2755,10 +2719,9 @@ export default {
       onBeforeUnmount(() => {
         window.removeEventListener('resize', handleResize);
         clearTimeout(handleResize.timer);
-        // 取消 Wails 事件订阅，避免监听器泄漏
-        cancelCommandOutput();
-        cancelToolAdded();
-        cancelToolUpdated();
+        // 取消事件订阅，避免监听器泄漏
+        unlistenToolAdded();
+        unlistenToolUpdated();
       });
 
       // 添加全局点击事件监听器
@@ -2960,6 +2923,9 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden; /* 防止整个页面滚动 */
+  /* 注意：这里不再覆盖 main.css 的背景。
+     若设为 transparent，顶部 titlebar 区域会失去深色底，
+     在透明窗口下表现为"纯透明/透出桌面"。统一用 main.css 的半透明黑底。 */
 }
 
 body, 
@@ -2976,23 +2942,58 @@ body,
   display: flex;
   min-height: 100vh;
   height: 100vh;
+  /* WebView 不画底色，整窗底交给原生 vibrancy 磨砂层负责。
+     这样 resize 时露出的层与稳态显示的层是同一个 → 无色差、不闪白。 */
   background-color: transparent;
   margin: 0;
   padding: 0;
 }
 
+/* 顶部窗口拖拽条
+   - 高 28px，与 macOS 透明 titlebar 红绿灯高度匹配
+   - 自带半透明深色底板，顶部有明确实心感（不再纯透明露出 vibrancy）
+   - 右侧主内容区上方为拖拽热区；左侧留出 78px 给红绿灯按钮，避免点不到
+   - z-index 高于普通内容，但通过右侧 padding 让红绿灯区域可点 */
+.titlebar-drag {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  /* Overlay 模式下顶部由 vibrancy 磨砂层覆盖（与其他区域一致），
+     这里保持透明，仅作为拖拽热区。红绿灯那块不再完全透明。 */
+  background: transparent;
+  z-index: 9000;
+  -webkit-app-region: drag; /* 兼容写法 */
+  app-region: drag;
+}
+/* 红绿灯区域不拦截拖拽，保持可点击 */
+.titlebar-drag::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 78px; /* macOS 红绿灯按钮区 */
+  height: 100%;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 /* 左侧边栏 */
 .sidebar {
   width: 280px; /* 默认宽度，将通过样式绑定动态控制 */
-  background: rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  background: transparent;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   position: fixed;
+  top: 0;
   height: 100vh;
   overflow-y: auto;
   transition: width 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+  /* Overlay 模式下 WebView 延伸到顶部，红绿灯按钮压在左上角，
+     给它留出空间，避免 SpearX logo 和红绿灯重叠 */
+  padding-top: 32px;
 }
 
 .sidebar.resizing {
@@ -3031,11 +3032,10 @@ body,
 }
 
 .sidebar-header {
-  padding: 32px 24px 16px 24px; /* 精确的留白比例 */
+  padding: 12px 24px 12px 24px; /* 顶部已由 .titlebar-drag + sidebar padding-top 负责留白 */
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  --wails-draggable: drag; /* 允许拖动窗口 */
+  gap: 12px;
 }
 
 /* 乔布斯式极简 SpearX 品牌标识 */
@@ -3043,13 +3043,13 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px 0;
-  margin-bottom: 16px;
+  padding: 8px 0;
+  margin-bottom: 8px;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   position: relative;
   width: 100%;
-  min-height: 48px;
+  min-height: 40px;
   overflow: visible;
   background: transparent;
 }
@@ -3432,14 +3432,14 @@ body,
 }
 
 .content-header {
-  background: rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  /* 透明：直接露出整窗原生磨砂层，避免本层 resize 时与底层产生色差 */
+  background: transparent;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 16px 20px 16px 20px;
+  /* Overlay 模式下顶部 28px 是拖拽区（含红绿灯），这里留出空间避免搜索框被压 */
+  padding: 40px 20px 16px 20px;
   position: sticky;
   top: 0;
   z-index: 100;
-  --wails-draggable: drag; /* 允许拖动窗口 */
 }
 
 /* iOS风格搜索栏 - 简洁实用 */
@@ -3448,7 +3448,6 @@ body,
   gap: 16px;
   align-items: center;
   width: 100%;
-  --wails-draggable: no-drag;
 }
 
 .search-wrapper {

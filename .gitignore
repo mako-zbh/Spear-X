@@ -1,7 +1,10 @@
 # Build output
-build/
 bin/
 frontend/dist/
+
+# Rust / Tauri build output
+src-tauri/target/
+src-tauri/gen/
 
 # Dependencies
 frontend/node_modules/
@@ -20,7 +23,7 @@ Thumbs.db
 *.tmp
 frontend/vite.config.js.timestamp-*
 
-# Compiled go test binary
+# Compiled test binary
 *.test
 *.out
 
