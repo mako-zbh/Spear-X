@@ -62,6 +62,14 @@ fn main() {
                 }
             }
 
+            // Windows: 应用 Mica 深色磨砂材质（Win11 生效，Win10 自动降级为普通窗口）。
+            // 与 macOS 架构一致——底色交给原生层，WebView 全透明，避免 resize 色差。
+            #[cfg(target_os = "windows")]
+            {
+                let window = app.get_webview_window("main").unwrap();
+                let _ = window_vibrancy::apply_mica(&window, Some(true));
+            }
+
             // 首次启动：确保配置文件存在
             if let Err(e) = config::ensure_config_exists() {
                 eprintln!("初始化配置文件失败: {}", e);

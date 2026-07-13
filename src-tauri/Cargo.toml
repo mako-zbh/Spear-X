@@ -38,6 +38,8 @@ raw-window-handle = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = ["Win32_Foundation", "Win32_System_Threading"] }
+# Windows 11 Mica 毛玻璃材质（Win10 自动降级为普通窗口）
+window-vibrancy = "0.6"
 
 [profile.dev]
 incremental = true
