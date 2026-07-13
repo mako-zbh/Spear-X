@@ -4,6 +4,8 @@ on:
   workflow_dispatch:
   push:
     branches: [tauri-migration, main]
+    tags:
+      - 'v*'
   pull_request:
 
 jobs:
@@ -58,7 +60,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # 不传 tagName/releaseName：只构建，不发 Release
+          # 推 v* 开头的 tag 时创建 Release；普通分支推送只构建不上线
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && 'v__VERSION__' || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SpearX v__VERSION__' || '' }}
+          releaseBody: '见 Assets 下载对应平台的安装包。macOS 首次打开如提示损坏，执行：xattr -rd com.apple.quarantine /Applications/SpearX.app'
+          releaseDraft: true
+          prerelease: false
           args: ${{ matrix.args }}
 
       - name: upload artifacts
@@ -72,3 +79,4 @@ jobs:
             src-tauri/target*/release/bundle/**/*.msi
             src-tauri/target*/release/bundle/**/*-setup.exe
           if-no-files-found: error
+
