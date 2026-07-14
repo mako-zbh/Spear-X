@@ -796,13 +796,14 @@ export default {
     
 
     const newTool = reactive({
-      Name: '',
-      Path: '',
-      FileName: '',
-      Value: '',
-      Command: '',
-      Optional: '',
-      Description: '' // 添加描述字段
+      name: '',
+      path: '',
+      fileName: '',
+      value: '',
+      command: '',
+      optional: '',
+      description: '', // 添加描述字段
+      tags: []
     });
     const selectedCategory = ref('');
     const outputText = ref('');
@@ -993,13 +994,14 @@ export default {
     // 重置新工具表单
     const resetNewToolForm = () => {
       Object.assign(newTool, {
-        Name: '',
-        Path: '',
-        FileName: '',
-        Value: '',
-        Command: '',
-        Optional: '',
-        Description: '' // 重置描述字段
+        name: '',
+        path: '',
+        fileName: '',
+        value: '',
+        command: '',
+        optional: '',
+        description: '', // 重置描述字段
+        tags: []
       });
       selectedCategory.value = '';
     };
@@ -1162,9 +1164,9 @@ export default {
           const toolPath = pathParts.slice(0, -1).join('/');
           
           Object.assign(newTool, {
-            Path: toolPath,
-            FileName: fileName,
-            Name: fileName.replace(/\.[^/.]+$/, "") // 如果工具名称为空，使用文件名（不带扩展名）
+            path: toolPath,
+            fileName: fileName,
+            name: fileName.replace(/\.[^/.]+$/, "") // 如果工具名称为空，使用文件名（不带扩展名）
           });
         }
       } catch (err) {
@@ -1379,16 +1381,16 @@ export default {
           }
         }
         
-        // 将工具对象转换为与后端兼容的格式
+        // 后端 Tool 结构体走 camelCase IPC，不要用 PascalCase（否则报 missing field `name`）
         const toolToAdd = {
-          Name: editDialog.tool.name.trim(),
-          Path: editDialog.tool.value === 'Browser' ? (editDialog.tool.url || '').trim() : (editDialog.tool.path || '').trim(),
-          FileName: editDialog.tool.value === 'Browser' ? '' : (editDialog.tool.fileName || ''),
-          Value: editDialog.tool.value,
-          Command: editDialog.tool.command || '',
-          Optional: editDialog.tool.optional || '',
-          Description: editDialog.tool.description || '',
-          Tags: editDialog.tool.tags || []
+          name: editDialog.tool.name.trim(),
+          path: editDialog.tool.value === 'Browser' ? (editDialog.tool.url || '').trim() : (editDialog.tool.path || '').trim(),
+          fileName: editDialog.tool.value === 'Browser' ? '' : (editDialog.tool.fileName || ''),
+          value: editDialog.tool.value,
+          command: editDialog.tool.command || '',
+          optional: editDialog.tool.optional || '',
+          description: editDialog.tool.description || '',
+          tags: editDialog.tool.tags || []
         };
         
         await api.addTool(toolToAdd, editDialog.category);
@@ -1405,35 +1407,35 @@ export default {
     const addTool = async () => {
       try {
         // 验证必填字段
-        if (!newTool.Name || !newTool.Name.trim()) {
+        if (!newTool.name || !newTool.name.trim()) {
           ElMessage.error('请输入工具名称');
           return;
         }
-        
-        if (!newTool.Value || !newTool.Value.trim()) {
+
+        if (!newTool.value || !newTool.value.trim()) {
           ElMessage.error('请选择执行类型');
           return;
         }
-        
+
         // 浏览器方式验证URL，其他方式验证路径
-        if (newTool.Value === 'Browser') {
-          if (!newTool.URL || !newTool.URL.trim()) {
+        if (newTool.value === 'Browser') {
+          if (!newTool.url || !newTool.url.trim()) {
             ElMessage.error('请输入网页URL');
             return;
           }
           // 简单的URL格式验证
           const urlPattern = /^https?:\/\/.+/i;
-          if (!urlPattern.test(newTool.URL.trim())) {
+          if (!urlPattern.test(newTool.url.trim())) {
             ElMessage.error('请输入有效的网页URL（以http://或https://开头）');
             return;
           }
         } else {
-          if (!newTool.Path || !newTool.Path.trim()) {
+          if (!newTool.path || !newTool.path.trim()) {
             ElMessage.error('请输入工具路径');
             return;
           }
         }
-        
+
         await api.addTool(newTool, selectedCategory.value);
 
         await loadCategories();

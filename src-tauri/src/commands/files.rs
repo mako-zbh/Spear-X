@@ -1,6 +1,6 @@
 use crate::config;
 use crate::models::*;
-use crate::paths::get_resource_path;
+use crate::paths::{self, get_resource_path};
 use crate::scanner;
 use std::collections::HashMap;
 use std::fs;
@@ -113,13 +113,25 @@ pub fn browse_directory(path_input: String) -> Result<Vec<FileInfo>, String> {
 pub fn get_tool_directory(tool_path: String) -> Result<Vec<FileInfo>, String> {
     println!("GetToolDirectory 调用，原始路径: {}", tool_path);
 
-    // 使用统一的路径清理方法
-    let cleaned_path = config::clean_tool_path(&tool_path);
+    // 空路径校验
+    if tool_path.trim().is_empty() {
+        return Err("工具路径不能为空".to_string());
+    }
 
-    // 移除resources前缀，因为BrowseDirectory会自动添加
+    // 绝对路径 / URL：直接交给 browse_directory，它本身支持绝对路径。
+    // （URL 型工具不会走到这里，前端 loadFileBrowser 已拦截 Browser 类型）
+    if paths::is_url(&tool_path) {
+        return Ok(vec![]);
+    }
+    if Path::new(&tool_path).is_absolute() {
+        return browse_directory(tool_path);
+    }
+
+    // 相对路径：清理后去掉 resources/ 前缀，因为 BrowseDirectory 会自动拼回 resources/
+    let cleaned_path = config::clean_tool_path(&tool_path);
     let clean_path = cleaned_path.strip_prefix("resources/").unwrap_or("");
 
-    // 如果路径为空，返回错误
+    // 清理后为空，说明原本就只填了 "resources/" 这种无意义路径
     if clean_path.is_empty() {
         return Err("工具路径不能为空".to_string());
     }
