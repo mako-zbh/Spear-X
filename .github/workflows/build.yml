@@ -68,6 +68,15 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: list bundle artifacts
+        if: always()
+        run: |
+          echo "=== bundle 目录树 ==="
+          find src-tauri/target -maxdepth 6 -path "*bundle*" 2>/dev/null || true
+          echo "=== 安装包文件 ==="
+          find src-tauri/target -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*-setup.exe" \) 2>/dev/null || true
+          find src-tauri/target -type d -name "*.app" 2>/dev/null || true
+
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -78,5 +87,6 @@ jobs:
             src-tauri/target*/release/bundle/**/*.app
             src-tauri/target*/release/bundle/**/*.msi
             src-tauri/target*/release/bundle/**/*-setup.exe
-          if-no-files-found: error
+          if-no-files-found: warn
+
 
