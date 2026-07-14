@@ -70,12 +70,14 @@ jobs:
 
       - name: list bundle artifacts
         if: always()
+        shell: bash
         run: |
           echo "=== bundle 目录树 ==="
           find src-tauri/target -maxdepth 6 -path "*bundle*" 2>/dev/null || true
           echo "=== 安装包文件 ==="
           find src-tauri/target -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*-setup.exe" \) 2>/dev/null || true
           find src-tauri/target -type d -name "*.app" 2>/dev/null || true
+
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
