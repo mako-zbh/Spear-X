@@ -65,6 +65,7 @@ pub fn get_category_info(
 
 /// 扫描指定路径下的工具
 /// resources文件夹下的每个目录是分类文件夹，每个分类下的子目录是工具文件夹
+/// 只收录包含可启动文件（jar、二进制、exe）的工具目录
 pub fn scan_tools_in_path(scan_path: &str) -> Result<Vec<ScannedTool>, String> {
     let mut scanned_tools = Vec::new();
 
@@ -114,11 +115,16 @@ pub fn scan_tools_in_path(scan_path: &str) -> Result<Vec<ScannedTool>, String> {
                 continue;
             }
 
+            // 只保留包含 jar、二进制或 exe 的工具目录
+            let tool_dir_path = tool_dir.path();
+            if detect_launchable_file(&tool_dir_path).is_none() {
+                continue;
+            }
+
             // 构建相对于resources的路径 - 确保始终保存相对路径格式
             let tool_path = format!("resources/{}/{}", dir_name, tool_dir.file_name().to_string_lossy());
             // 确保路径分隔符统一（已经是 / 分隔）
 
-            // 扫描所有工具目录，不管是否有可执行文件
             let scanned_tool = ScannedTool {
                 path: tool_path,
                 category: category_info.name.clone(),
@@ -135,6 +141,7 @@ pub fn scan_tools_in_path(scan_path: &str) -> Result<Vec<ScannedTool>, String> {
 /// 支持两种目录结构：
 /// 1. 分类式：customPath/category1/tool1, customPath/category2/tool2
 /// 2. 平铺式：customPath/tool1, customPath/tool2 (统一归类为"自定义工具")
+/// 只收录包含可启动文件（jar、二进制、exe）的工具目录
 pub fn scan_tools_in_custom_path(scan_path: &str) -> Result<Vec<ScannedTool>, String> {
     let mut scanned_tools = Vec::new();
 
@@ -186,6 +193,12 @@ pub fn scan_tools_in_custom_path(scan_path: &str) -> Result<Vec<ScannedTool>, St
                     continue;
                 }
                 let tool_abs_path = category_path.join(sub_entry.file_name());
+
+                // 只保留包含 jar、二进制或 exe 的工具目录
+                if detect_launchable_file(&tool_abs_path).is_none() {
+                    continue;
+                }
+
                 let scanned_tool = ScannedTool {
                     path: tool_abs_path.to_string_lossy().to_string(),
                     category: category_info.name.clone(),
@@ -208,6 +221,12 @@ pub fn scan_tools_in_custom_path(scan_path: &str) -> Result<Vec<ScannedTool>, St
                 continue;
             }
             let tool_abs_path = scan_path.to_string() + "/" + &entry.file_name().to_string_lossy();
+
+            // 只保留包含 jar、二进制或 exe 的工具目录
+            if detect_launchable_file(Path::new(&tool_abs_path)).is_none() {
+                continue;
+            }
+
             let scanned_tool = ScannedTool {
                 path: tool_abs_path,
                 category: category_info.name.clone(),
@@ -220,78 +239,82 @@ pub fn scan_tools_in_custom_path(scan_path: &str) -> Result<Vec<ScannedTool>, St
     Ok(scanned_tools)
 }
 
-/// 分析工具目录内容，决定如何添加工具
-/// 返回 (toolType, fileName, command)
-pub fn analyze_tool_directory(tool_dir: &str) -> (String, String, String) {
-    // 读取工具目录内容
-    let files = match fs::read_dir(tool_dir) {
-        Ok(f) => f,
-        Err(_) => return ("openterm".to_string(), "".to_string(), "".to_string()),
-    };
+/// 检测工具目录中的可启动文件（jar、exe、二进制），按 jar > exe/二进制 的优先级返回
+/// 返回 (toolType, fileName, command)，目录中没有可启动文件时返回 None
+pub fn detect_launchable_file(tool_dir: &Path) -> Option<(String, String, String)> {
+    let files = fs::read_dir(tool_dir).ok()?;
 
-    let file_vec: Vec<_> = files.flatten().collect();
+    let mut jar_file: Option<String> = None;
+    let mut bin_file: Option<String> = None;
 
-    // 如果目录为空，返回openterm
-    if file_vec.is_empty() {
-        return ("openterm".to_string(), "".to_string(), "".to_string());
-    }
-
-    // 查找jar文件、二进制文件和app文件
-    let mut jar_files = Vec::new();
-    let mut app_files = Vec::new();
-    let mut bin_files = Vec::new();
-
-    for file in &file_vec {
+    for file in files.flatten() {
+        if file.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
         let file_name = file.file_name().to_string_lossy().to_string();
         let file_name_lower = file_name.to_lowercase();
 
-        let is_dir = file.file_type().map(|t| t.is_dir()).unwrap_or(false);
-
-        if is_dir {
-            // 检查是否是.app目录（macOS应用程序包）
-            if file_name_lower.ends_with(".app") {
-                app_files.push(file_name);
-            }
-            continue;
-        }
-
-        // 检查jar文件
         if file_name_lower.ends_with(".jar") {
-            jar_files.push(file_name);
-        } else {
-            // 二进制可执行文件
-            let metadata = file.metadata();
-            if is_binary_executable(&file_name) {
-                if let Ok(meta) = metadata {
-                    #[cfg(unix)]
-                    {
+            if jar_file.is_none() {
+                jar_file = Some(file_name);
+            }
+        } else if file_name_lower.ends_with(".exe") || is_binary_executable(&file_name) {
+            // Unix 上无扩展名二进制需要执行权限；.exe 在 Windows 上没有执行位概念
+            #[cfg(unix)]
+            let launchable = if file_name_lower.ends_with(".exe") {
+                true
+            } else {
+                file.metadata()
+                    .map(|meta| {
                         use std::os::unix::fs::PermissionsExt;
-                        let mode = meta.permissions().mode();
-                        if mode & 0o111 != 0 {
-                            bin_files.push(file_name);
-                        }
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        let _ = meta;
-                        bin_files.push(file_name);
-                    }
-                }
+                        meta.permissions().mode() & 0o111 != 0
+                    })
+                    .unwrap_or(false)
+            };
+            #[cfg(not(unix))]
+            let launchable = true;
+
+            if launchable && bin_file.is_none() {
+                bin_file = Some(file_name);
             }
         }
     }
 
-    // 优先级：jar > 二进制 > app > 其他
-    if !jar_files.is_empty() {
-        return ("Java8".to_string(), jar_files[0].clone(), "-jar".to_string());
+    jar_file
+        .map(|f| ("Java8".to_string(), f, "-jar".to_string()))
+        .or_else(|| bin_file.map(|f| ("Binary".to_string(), f, String::new())))
+}
+
+/// 分析工具目录内容，决定如何添加工具
+/// 返回 (toolType, fileName, command)
+pub fn analyze_tool_directory(tool_dir: &str) -> (String, String, String) {
+    let dir_path = Path::new(tool_dir);
+
+    // 目录为空或无法读取时返回openterm
+    let has_entries = fs::read_dir(dir_path)
+        .map(|mut entries| entries.next().is_some())
+        .unwrap_or(false);
+    if !has_entries {
+        return ("openterm".to_string(), "".to_string(), "".to_string());
     }
 
-    if !bin_files.is_empty() {
-        return ("Binary".to_string(), bin_files[0].clone(), "".to_string());
+    // 优先级：jar > 二进制/exe
+    if let Some(result) = detect_launchable_file(dir_path) {
+        return result;
     }
 
-    if !app_files.is_empty() {
-        return ("Open".to_string(), app_files[0].clone(), "".to_string());
+    // 查找.app目录（macOS应用程序包）
+    if let Ok(entries) = fs::read_dir(dir_path) {
+        for entry in entries.flatten() {
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+            if !is_dir {
+                continue;
+            }
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.to_lowercase().ends_with(".app") {
+                return ("Open".to_string(), file_name, "".to_string());
+            }
+        }
     }
 
     // 如果只有子目录或其他文件，使用openterm
@@ -547,4 +570,187 @@ pub fn auto_add_scanned_tools(tools: &[ScannedTool]) -> Result<(), String> {
 
     // 保存配置
     config::save_categories_to_file(&categories, &config_yaml)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    /// 在系统临时目录下创建一个唯一的测试目录
+    fn make_temp_dir(label: &str) -> std::path::PathBuf {
+        let dir = env::temp_dir().join(format!(
+            "spearx_scanner_test_{}_{}",
+            label,
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_file(dir: &Path, name: &str) {
+        fs::write(dir.join(name), b"test").unwrap();
+    }
+
+    #[cfg(unix)]
+    fn set_exec_bit(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path).unwrap().permissions();
+        perms.set_mode(perms.mode() | 0o111);
+        fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn test_detect_jar_file() {
+        let dir = make_temp_dir("jar");
+        write_file(&dir, "tool.jar");
+        write_file(&dir, "readme.txt");
+
+        let result = detect_launchable_file(&dir).unwrap();
+        assert_eq!(result.0, "Java8");
+        assert_eq!(result.1, "tool.jar");
+        assert_eq!(result.2, "-jar");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_detect_exe_file() {
+        let dir = make_temp_dir("exe");
+        write_file(&dir, "tool.exe");
+        write_file(&dir, "readme.txt");
+
+        let result = detect_launchable_file(&dir).unwrap();
+        assert_eq!(result.0, "Binary");
+        assert_eq!(result.1, "tool.exe");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_detect_unix_binary_requires_exec_bit() {
+        let dir = make_temp_dir("bin");
+        write_file(&dir, "toolbin");
+        write_file(&dir, "readme.txt");
+
+        // 无执行权限的裸文件不算可启动文件
+        assert!(detect_launchable_file(&dir).is_none());
+
+        set_exec_bit(&dir.join("toolbin"));
+        let result = detect_launchable_file(&dir).unwrap();
+        assert_eq!(result.0, "Binary");
+        assert_eq!(result.1, "toolbin");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_detect_none_for_docs_only_dir() {
+        let dir = make_temp_dir("none");
+        write_file(&dir, "readme.txt");
+        write_file(&dir, "LICENSE");
+
+        assert!(detect_launchable_file(&dir).is_none());
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_analyze_priority_jar_over_exe() {
+        let dir = make_temp_dir("prio");
+        write_file(&dir, "b.exe");
+        write_file(&dir, "a.jar");
+
+        let result = analyze_tool_directory(&dir.to_string_lossy());
+        assert_eq!(result.0, "Java8");
+        assert_eq!(result.1, "a.jar");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_analyze_app_bundle_falls_back_to_open() {
+        let dir = make_temp_dir("app");
+        fs::create_dir(dir.join("SomeApp.app")).unwrap();
+
+        let result = analyze_tool_directory(&dir.to_string_lossy());
+        assert_eq!(result.0, "Open");
+        assert_eq!(result.1, "SomeApp.app");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_analyze_empty_dir_returns_openterm() {
+        let dir = make_temp_dir("empty");
+        let result = analyze_tool_directory(&dir.to_string_lossy());
+        assert_eq!(result.0, "openterm");
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_scan_tools_only_keeps_launchable_dirs() {
+        let root = make_temp_dir("scan");
+        let cat = root.join("info");
+        let with_jar = cat.join("tool-with-jar");
+        let without = cat.join("tool-without");
+        fs::create_dir_all(&with_jar).unwrap();
+        fs::create_dir_all(&without).unwrap();
+        write_file(&with_jar, "tool.jar");
+        write_file(&without, "readme.txt");
+
+        let scanned = scan_tools_in_path(&root.to_string_lossy()).unwrap();
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].path.ends_with("tool-with-jar"));
+        // 分类名可能被真实用户配置中的目录映射改写（info -> 信息收集 等），不在此断言
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn test_scan_custom_path_flat_keeps_launchable_dirs() {
+        let root = make_temp_dir("custom_flat");
+        let with_exe = root.join("tool-with-exe");
+        let without = root.join("tool-without");
+        fs::create_dir_all(&with_exe).unwrap();
+        fs::create_dir_all(&without).unwrap();
+        write_file(&with_exe, "tool.exe");
+        write_file(&without, "readme.txt");
+
+        let scanned = scan_tools_in_custom_path(&root.to_string_lossy()).unwrap();
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].path.ends_with("tool-with-exe"));
+        assert_eq!(scanned[0].category, "自定义工具");
+
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn test_scan_custom_path_categorised_keeps_launchable_dirs() {
+        let root = make_temp_dir("custom_cat");
+        let cat = root.join("pentest");
+        let with_bin = cat.join("tool-with-bin");
+        let without = cat.join("tool-without");
+        fs::create_dir_all(&with_bin).unwrap();
+        fs::create_dir_all(&without).unwrap();
+
+        #[cfg(unix)]
+        {
+            write_file(&with_bin, "toolbin");
+            set_exec_bit(&with_bin.join("toolbin"));
+        }
+        #[cfg(not(unix))]
+        write_file(&with_bin, "tool.exe");
+        write_file(&without, "readme.txt");
+
+        let scanned = scan_tools_in_custom_path(&root.to_string_lossy()).unwrap();
+        assert_eq!(scanned.len(), 1);
+        assert!(scanned[0].path.ends_with("tool-with-bin"));
+        assert_eq!(scanned[0].category, "pentest");
+
+        fs::remove_dir_all(&root).unwrap();
+    }
 }
