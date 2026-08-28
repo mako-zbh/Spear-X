@@ -107,6 +107,7 @@ fn main() {
             // 工具 CRUD
             commands::tools::add_tool,
             commands::tools::delete_tool,
+            commands::tools::batch_delete_tools,
             commands::tools::update_tool,
             commands::tools::update_tool_description,
             commands::tools::search_tools,

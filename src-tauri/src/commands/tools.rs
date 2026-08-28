@@ -83,6 +83,63 @@ pub fn delete_tool(tool_name: String, category_name: String) -> Result<(), Strin
     config::save_categories_to_file(&categories, &config_yaml)
 }
 
+/// 批量删除的工具体引用（分类名 + 工具名）
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchToolRef {
+    pub category: String,
+    pub name: String,
+    #[serde(default)]
+    pub path: String,
+}
+
+/// 批量删除工具，同时清理对应笔记，一次写入配置
+#[tauri::command]
+pub fn batch_delete_tools(tools: Vec<BatchToolRef>) -> Result<usize, String> {
+    let (config_yaml, mut categories) = config::load_config()?;
+
+    let mut deleted: usize = 0;
+    let mut removed_paths: Vec<String> = Vec::new();
+
+    for category in &mut categories.categories {
+        let targets: std::collections::HashSet<&str> = tools
+            .iter()
+            .filter(|t| t.category == category.name)
+            .map(|t| t.name.as_str())
+            .collect();
+        if targets.is_empty() {
+            continue;
+        }
+        let original_len = category.tools.len();
+        let category_name = category.name.clone();
+        category
+            .tools
+            .retain(|t| {
+                let is_target = targets.contains(t.name.as_str());
+                if is_target {
+                    println!("批量删除工具: {} (分类: {})", t.name, category_name);
+                    removed_paths.push(t.path.clone());
+                }
+                !is_target
+            });
+        deleted += original_len - category.tools.len();
+    }
+
+    if deleted == 0 {
+        return Err("未找到任何要删除的工具".to_string());
+    }
+
+    // 清理被删工具的笔记
+    for path in &removed_paths {
+        if notes::clean_tool_note(path) {
+            println!("已清理工具笔记: {}", path);
+        }
+    }
+
+    config::save_categories_to_file(&categories, &config_yaml)?;
+    Ok(deleted)
+}
+
 /// 更新工具信息
 #[tauri::command]
 pub fn update_tool(

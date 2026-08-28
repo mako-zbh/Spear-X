@@ -160,9 +160,30 @@
             <el-button @click="showJavaConfigDialog" title="Java配置" class="icon-button">
               <el-icon><Setting /></el-icon>
             </el-button>
+            <el-button @click="toggleBatchMode" title="批量管理" class="icon-button" :class="{ 'batch-active': batchMode }">
+              <el-icon><Finished /></el-icon>
+            </el-button>
           </div>
             </div>
           </div>
+
+      <!-- 批量管理操作栏 -->
+      <div class="batch-action-bar" v-if="batchMode">
+        <span class="batch-count">已选 {{ selectedTools.length }} 个工具</span>
+        <div class="batch-actions">
+          <el-button size="small" @click="selectAllVisibleTools">全选当前列表</el-button>
+          <el-button size="small" @click="clearToolSelection">清空选择</el-button>
+          <el-button
+            size="small"
+            type="danger"
+            :disabled="!selectedTools.length"
+            @click="batchDeleteConfirm"
+          >
+            批量删除
+          </el-button>
+          <el-button size="small" @click="toggleBatchMode">退出管理</el-button>
+        </div>
+      </div>
 
       <!-- 工具网格 -->
       <div class="tools-container">
@@ -175,15 +196,20 @@
             v-model="currentTools"
               :animation="150"
               ghost-class="ghost"
+              :disabled="batchMode"
             @end="onDragEnd"
             item-key="name"
             class="tools-grid-inner"
-          >
+            >
             <template #item="{ element: tool, index }">
-              <div 
+              <div
                   class="tool-card"
-                  @click="executeTool(tool)"
+                  :class="{ 'tool-selected': isToolSelected(tool) }"
+                  @click="batchMode ? toggleToolSelect(tool) : executeTool(tool)"
               >
+                <div class="batch-check" v-if="batchMode" :class="{ checked: isToolSelected(tool) }">
+                  <el-icon v-if="isToolSelected(tool)"><Check /></el-icon>
+                </div>
                 <div class="tool-header">
                   <div class="tool-icon">
                     <span class="type-icon" v-html="getToolIcon(tool)"></span>
@@ -1888,6 +1914,77 @@ export default {
       }
     };
 
+    // ===== 批量管理 =====
+    const batchMode = ref(false);
+    const selectedTools = ref([]); // [{ category, name, path }]
+
+    const toolKey = (tool) => `${tool.categoryName || ''}::${tool.name}`;
+    const isToolSelected = (tool) =>
+      selectedTools.value.some(t => `${t.category}::${t.name}` === toolKey(tool));
+
+    const toggleToolSelect = (tool) => {
+      const idx = selectedTools.value.findIndex(t => `${t.category}::${t.name}` === toolKey(tool));
+      if (idx >= 0) {
+        selectedTools.value.splice(idx, 1);
+      } else {
+        selectedTools.value.push({
+          category: tool.categoryName || '',
+          name: tool.name,
+          path: tool.path || ''
+        });
+      }
+    };
+
+    const selectAllVisibleTools = () => {
+      currentTools.value.forEach(tool => {
+        if (!isToolSelected(tool)) {
+          selectedTools.value.push({
+            category: tool.categoryName || '',
+            name: tool.name,
+            path: tool.path || ''
+          });
+        }
+      });
+    };
+
+    const clearToolSelection = () => {
+      selectedTools.value = [];
+    };
+
+    const toggleBatchMode = () => {
+      batchMode.value = !batchMode.value;
+      if (!batchMode.value) {
+        clearToolSelection();
+      }
+    };
+
+    const batchDeleteConfirm = async () => {
+      if (!selectedTools.value.length) return;
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除选中的 ${selectedTools.value.length} 个工具吗？将同时删除对应的笔记。`,
+          '批量删除确认',
+          {
+            confirmButtonText: '删除',
+            cancelButtonText: '取消',
+            type: 'warning',
+            customClass: 'elegant-confirm-dialog'
+          }
+        );
+
+        const deleted = await api.batchDeleteTools(selectedTools.value);
+        ElMessage.success(`成功删除 ${deleted} 个工具`);
+        clearToolSelection();
+        await loadCategories();
+        await loadAllTags();
+        updateCurrentTools();
+      } catch (err) {
+        if (err !== 'cancel') {
+          ElMessage.error(`批量删除失败: ${err}`);
+        }
+      }
+    };
+
     // 显示工具笔记
     const showToolNotes = (tool) => {
       ElMessage.info(`暂未实现笔记功能 - ${tool.Name}`);
@@ -2810,6 +2907,15 @@ export default {
       editTool,
       copyToolPath,
       deleteToolConfirm,
+      // 批量管理
+      batchMode,
+      selectedTools,
+      isToolSelected,
+      toggleToolSelect,
+      selectAllVisibleTools,
+      clearToolSelection,
+      toggleBatchMode,
+      batchDeleteConfirm,
       showToolNotes,
       openToolDirectoryByPath,
       searchByTag,
@@ -3606,8 +3712,71 @@ body,
   display: contents;
 }
 
+/* 批量管理操作栏 */
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.batch-count {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 批量管理按钮激活态 */
+.icon-button.batch-active {
+  background: rgba(64, 158, 255, 0.25);
+  border-color: rgba(64, 158, 255, 0.6);
+}
+
+/* 批量模式卡片选择态与勾选框 */
+.tool-card.tool-selected {
+  border-color: rgba(64, 158, 255, 0.7);
+  background: rgba(64, 158, 255, 0.12);
+}
+
+.batch-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.batch-check.checked {
+  border-color: #409eff;
+  background: #409eff;
+  color: #fff;
+}
+
+.batch-check .el-icon {
+  font-size: 12px;
+}
+
 /* 工具卡片 */
 .tool-card {
+  position: relative;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;

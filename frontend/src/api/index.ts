@@ -41,6 +41,12 @@ export interface ScannedTool {
   possibleFiles: string[]
 }
 
+export interface BatchToolRef {
+  category: string
+  name: string
+  path: string
+}
+
 export interface FileInfo {
   name: string
   isDir: boolean
@@ -87,6 +93,9 @@ export const addTool = (tool: Tool, categoryName: string) =>
 
 export const deleteTool = (toolName: string, categoryName: string) =>
   invoke('delete_tool', { toolName, categoryName })
+
+export const batchDeleteTools = (tools: BatchToolRef[]) =>
+  invoke<number>('batch_delete_tools', { tools })
 
 export const updateTool = (originalName: string, categoryName: string, tool: Tool) =>
   invoke('update_tool', { originalName, categoryName, tool })
