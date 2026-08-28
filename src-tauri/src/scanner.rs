@@ -400,6 +400,24 @@ pub fn format_tool_name(dir_name: &str) -> String {
     name
 }
 
+/// 推导扫描工具的显示名称：优先用启动文件名（去掉扩展名，更贴近工具真实名称），
+/// 没有启动文件时回退到目录名
+pub fn derive_tool_name(dir_name: &str, file_name: &str) -> String {
+    let source = if !file_name.is_empty() {
+        Path::new(file_name)
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    if source.is_empty() {
+        format_tool_name(dir_name)
+    } else {
+        format_tool_name(&source)
+    }
+}
+
 /// 获取真正的新工具（过滤掉已存在的）
 pub fn get_new_tools_from_scanned(tools: &[ScannedTool]) -> Result<Vec<ScannedTool>, String> {
     let (_config_yaml, categories) = config::load_config().unwrap_or_default();
@@ -520,9 +538,9 @@ pub fn auto_add_scanned_tools(tools: &[ScannedTool]) -> Result<(), String> {
             continue;
         }
 
-        // 从路径中提取工具名称（使用文件夹名）
+        // 从路径中提取目录名（兜底的工具名来源）
         let path_parts: Vec<&str> = scanned_tool.path.split('/').collect();
-        let tool_name = if path_parts.is_empty() || path_parts[path_parts.len() - 1].is_empty() {
+        let dir_name = if path_parts.is_empty() || path_parts[path_parts.len() - 1].is_empty() {
             "Unknown Tool".to_string()
         } else {
             path_parts[path_parts.len() - 1].to_string()
@@ -535,7 +553,7 @@ pub fn auto_add_scanned_tools(tools: &[ScannedTool]) -> Result<(), String> {
 
         // 创建新工具
         let new_tool = Tool {
-            name: format_tool_name(&tool_name),
+            name: derive_tool_name(&dir_name, &file_name),
             path: scanned_tool.path.clone(),
             file_name,
             value: tool_type,
@@ -690,6 +708,22 @@ mod tests {
         assert_eq!(result.0, "openterm");
 
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_derive_tool_name_prefers_launchable_file() {
+        // 有启动文件时用文件名（去扩展名），比目录名更贴近真实工具名
+        assert_eq!(derive_tool_name("shiro_v2", "ShiroExploit-2.2.jar"), "ShiroExploit 2.2");
+        assert_eq!(derive_tool_name("nmap", "nmap-7.95.exe"), "Nmap 7.95");
+        assert_eq!(derive_tool_name("dir", "SomeApp.app"), "SomeApp");
+        // 多段扩展名只去掉最后的 .jar
+        assert_eq!(derive_tool_name("dir", "tool.v1.2.jar"), "Tool.v1.2");
+    }
+
+    #[test]
+    fn test_derive_tool_name_falls_back_to_dir() {
+        assert_eq!(derive_tool_name("fscan", ""), "Fscan");
+        assert_eq!(derive_tool_name("sqlmap-dev", ""), "Sqlmap dev");
     }
 
     #[test]
