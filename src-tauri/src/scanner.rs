@@ -322,6 +322,8 @@ pub fn analyze_tool_directory(tool_dir: &str) -> (String, String, String) {
 }
 
 /// 判断文件是否为可执行文件
+// is_dir/_metadata 仅在 Unix 分支使用，Windows 上编译掉会触发未使用警告
+#[cfg_attr(not(unix), allow(unused_variables))]
 pub fn is_executable_file(file_name: &str, is_dir: bool, _metadata: Option<&fs::Metadata>) -> bool {
     let file_name_lower = file_name.to_lowercase();
 
@@ -352,7 +354,6 @@ pub fn is_executable_file(file_name: &str, is_dir: bool, _metadata: Option<&fs::
         }
     }
 
-    let _ = file_name_lower;
     false
 }
 
