@@ -69,7 +69,8 @@ jobs:
           releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'SpearX v__VERSION__' || '' }}
           releaseBody: '见 Assets 下载对应平台的安装包。macOS 首次打开如提示损坏，执行：xattr -rd com.apple.quarantine /Applications/SpearX.app'
           releaseDraft: true
-          prerelease: false
+          # 版本号含 beta/rc 时自动标记为预发布
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
           args: ${{ matrix.args }}
 
       - name: list bundle artifacts
